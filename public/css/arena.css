@@ -43,11 +43,17 @@ a{color:inherit}
   font-family:var(--fd); font-weight:800; font-size:14px}
 .brandname{font-family:var(--fd); font-weight:800; letter-spacing:.18em; font-size:16px}
 .brandlogo{width:42px; height:42px; border-radius:10px; object-fit:cover; flex:none; background:#000}
-.herologo{width:72px; height:72px; border-radius:16px; object-fit:cover; background:#000; display:block; margin:0; box-shadow:0 10px 30px rgba(0,0,0,.35)}
-.herorow{display:flex; align-items:center; gap:16px; margin:28px 0 16px}
-.qsihero{height:56px; width:auto; border-radius:12px; display:block}
+.brandhero{display:flex; align-items:center; gap:22px; background:var(--panel);
+  border:1px solid var(--line-soft); border-radius:18px; padding:26px; margin:28px 0 22px;
+  box-shadow:0 14px 40px rgba(0,0,0,.25)}
+.herologo{width:104px; height:104px; border-radius:22px; object-fit:cover; background:#000; display:block; margin:0; flex:none;
+  box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.herodiv{width:1px; align-self:stretch; min-height:96px; background:var(--line); flex:none}
+.qsihero{height:80px; width:auto; border-radius:12px; display:block; flex:none;
+  border:1px solid var(--line-soft); box-shadow:0 10px 30px rgba(0,0,0,.3); background:#fff}
+@media(max-width:480px){.brandhero{gap:14px; padding:18px}.herologo{width:84px; height:84px; border-radius:18px}.qsihero{height:62px}.herodiv{min-height:76px}}
 footer{display:flex; align-items:center; justify-content:space-between; gap:12px}
-.qsifoot{height:26px; width:auto; border-radius:6px; flex:none}
+.qsifoot{height:30px; width:auto; border-radius:6px; flex:none; border:1px solid var(--line-soft); background:#fff}
 .livedot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--go); margin-right:7px; vertical-align:1px}
 .livedot.idle{background:var(--faint)}
 a.navlink{font-family:var(--fm); font-size:11px; letter-spacing:.2em; color:var(--muted); text-decoration:none; text-transform:uppercase}
