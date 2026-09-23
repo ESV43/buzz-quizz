@@ -106,7 +106,12 @@ function paint(state, teams) {
   $('st').textContent = `Q${state.questionNo || '–'} · ${state.armed ? 'Live' : 'Locked'} · ${state.buzzes?.length || 0} presses`;
   const w = state.buzzes?.[0];
   $('winner').textContent = w ? `${w.teamName} · +${w.deltaMs} ms` : 'Awaiting press';
-  $('mini').textContent = (state.buzzes || []).slice(0, 5).map((b) => `P${b.rank} ${b.teamName} +${b.deltaMs}`).join('   ');
+  const ranks = (state.buzzes || []).slice(0, 5);
+  $('mini').innerHTML = ranks.length
+    ? ranks.map((b) =>
+      `<div class="orow"><span class="mono">P${b.rank}</span><span>${escapeHtml(b.teamName)}</span>`
+      + `<span class="mono">+${b.deltaMs}</span></div>`).join('')
+    : '<p class="note" style="text-align:center">No presses.</p>';
   if (Array.isArray(teams)) {
     awayTeams = new Map(teams.filter((t) => t.away).map((t) => [t.id, t]));
     renderAway();
