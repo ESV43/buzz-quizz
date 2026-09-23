@@ -1,0 +1,15 @@
+{
+  "name": "buzz-arena",
+  "version": "2.0.0",
+  "description": "Quiz buzzer system — 8-20 teams, latency-compensated rankings, companion remote",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.7.5"
+  }
+}

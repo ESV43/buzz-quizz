@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>Buzzer — Buzz Arena</title>
+<link rel="stylesheet" href="/css/arena.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="/socket.io/socket.io.js"></script>
+<meta name="theme-color" content="#0a0c0e"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+</head>
+<body>
+<div id="teamGlow" style="position:fixed;inset:0;pointer-events:none;z-index:0"></div>
+<div class="wrap" style="max-width:600px; position:relative; z-index:1">
+  <header class="strip">
+    <div class="cell">
+      <div class="brandline"><span class="brandmark">B</span><span class="brandname">BUZZER</span></div>
+      <span class="k">Team terminal</span>
+    </div>
+    <div class="cell"><span class="k">Room</span><span class="v mono" id="roomTag" style="font-size:16px">— — —</span></div>
+    <div class="cell hidenpresent"><a class="navlink" href="/">Lobby</a></div>
+  </header>
+
+  <div id="connBar">CONNECTION LOST — RECONNECTING</div>
+
+  <div id="joinView" class="panel" style="margin-top:26px">
+    <div class="kicker">Check in</div>
+    <h2 class="ptitle">Join the round</h2>
+    <p class="sub">Room code is on the host display. One terminal per team of two.</p>
+    <div class="field"><label>Room code</label>
+      <input id="roomInput" class="code" placeholder="·····" maxlength="5" autocomplete="off"/>
+    </div>
+    <div class="field"><label>Team name</label>
+      <input id="nameInput" placeholder="e.g. North Campus" maxlength="24" autocomplete="off"/>
+    </div>
+    <div class="btnrow" style="margin-top:16px"><button class="btn go" id="joinBtn">Join room</button></div>
+    <p class="err" id="joinErr"></p>
+    <p class="note">Haptics and tone confirm every press. Display stays awake — keep this tab forward.</p>
+  </div>
+
+  <div id="playView" style="display:none">
+    <div class="phead" style="margin-top:22px">
+      <div class="cell"><span class="k">Question</span><span class="v mono" id="qPill" style="font-size:17px">–</span></div>
+      <div class="cell"><span class="k">State</span><span class="v" id="stateTag" style="font-size:17px">Locked</span></div>
+      <div class="cell"><span class="k">Sync</span><span class="v mono" id="netPill" style="font-size:17px">—</span></div>
+    </div>
+
+    <div class="ident">
+      <span class="chip" id="teamChip"></span>
+      <h1 id="teamName">Team</h1>
+      <button id="renameBtn">EDIT</button>
+    </div>
+
+    <div class="stage">
+      <div class="dial" id="dial">
+        <div class="dial-ticks"></div>
+        <button id="buzzBtn" class="locked">WAIT</button>
+      </div>
+    </div>
+
+    <div class="readout st-idle" id="readout">
+      <div class="r-pos" id="status">LOCKED</div>
+      <div class="r-sub" id="rankLine">WAITING FOR HOST</div>
+    </div>
+
+    <div class="order">
+      <div class="kicker">Order of press</div>
+      <div id="miniRanks"><p class="note">No presses.</p></div>
+    </div>
+  </div>
+
+  <footer>BUZZ ARENA · team terminal · press times corrected per-device</footer>
+</div>
+<div class="toast" id="toast"></div>
+<div id="edgeFlash"></div>
+<script src="/js/play.js"></script>
+</body>
+</html>

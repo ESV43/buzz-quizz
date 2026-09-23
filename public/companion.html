@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Remote — Buzz Arena</title>
+<link rel="stylesheet" href="/css/arena.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="/socket.io/socket.io.js"></script>
+<meta name="theme-color" content="#0a0c0e"/>
+</head>
+<body>
+<div class="wrap" style="max-width:480px">
+  <header class="strip">
+    <div class="cell">
+      <div class="brandline"><span class="brandmark">B</span><span class="brandname">REMOTE</span></div>
+      <span class="k">Quizmaster</span>
+    </div>
+    <div class="cell"><a class="navlink" href="/">Lobby</a></div>
+  </header>
+
+  <div class="panel" id="lockCard" style="margin-top:26px">
+    <div class="kicker">Authentication</div>
+    <h2 class="ptitle">Quizmaster access</h2>
+    <p class="sub">Room code plus the 4-digit PIN from the host console. Three wrong attempts: 30-second lockout, host alerted.</p>
+    <div class="field"><label>Room code</label><input id="code" class="code" placeholder="·····" maxlength="5" autocomplete="off"/></div>
+    <div class="field"><label>Companion PIN</label><input id="pin" class="code" placeholder="····" inputmode="numeric" maxlength="4" autocomplete="off"/></div>
+    <div class="btnrow" style="margin-top:16px"><button class="btn go" id="unlock">Unlock remote</button></div>
+    <p class="err" id="err"></p>
+  </div>
+
+  <div id="remote" style="display:none">
+    <div class="panel" style="margin-top:26px; text-align:center">
+      <div class="kicker" id="st">Standby</div>
+      <div style="font-family:var(--fd); font-weight:800; font-size:26px; margin:6px 0" id="winner">—</div>
+      <div class="mono" style="font-size:12px; color:var(--muted)" id="mini"></div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <div class="kicker">Control surface</div>
+      <button class="btn go" id="arm" style="padding:18px">Arm buzzer</button>
+      <div class="btnrow" style="margin-top:8px">
+        <button class="btn plain" id="lock">Lock</button>
+        <button class="btn plain" id="next">Next</button>
+      </div>
+      <div class="btnrow" style="margin-top:8px"><button class="btn warn" id="reset">Reset</button></div>
+      <p class="note" style="margin:12px 0 0">Arming clears standings and opens a new question. Display stays awake while unlocked.</p>
+      <div class="btnrow" style="margin-top:10px"><button class="btn plain small" id="bye">Disconnect</button></div>
+    </div>
+  </div>
+
+  <footer>BUZZ ARENA · quizmaster remote · PIN-gated</footer>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/js/companion.js"></script>
+</body>
+</html>

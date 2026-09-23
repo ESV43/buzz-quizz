@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Host Console — Buzz Arena</title>
+<link rel="stylesheet" href="/css/arena.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="/socket.io/socket.io.js"></script>
+<meta name="theme-color" content="#0a0c0e"/>
+</head>
+<body>
+<div class="wrap" style="max-width:1320px">
+  <header class="strip">
+    <div class="cell">
+      <div class="brandline"><span class="brandmark">B</span><span class="brandname">BUZZ ARENA</span></div>
+      <span class="k">Host console</span>
+    </div>
+    <div class="cell hidenpresent">
+      <span class="k">Room</span>
+      <span class="v mono" id="roomCodeStrip">— — — — —</span>
+    </div>
+    <div class="cell opt">
+      <span class="k">Question</span>
+      <span class="v" id="qNumStrip">–</span>
+    </div>
+    <div class="cell">
+      <span class="k">Link</span>
+      <span class="v" style="font-size:15px" id="connPill"><span class="livedot idle"></span>Offline</span>
+    </div>
+    <div class="cell hidenpresent"><a class="navlink" href="/">Lobby</a></div>
+  </header>
+
+  <div id="setup" class="panel setuponly" style="max-width:560px; margin:30px auto">
+    <div class="kicker">Session setup</div>
+    <h2 class="ptitle">Open a room</h2>
+    <p class="sub">This machine is the timing host. Teams join by code or QR. 8–20 buzzers.</p>
+    <div class="guide">
+      <div class="gstep"><b>01</b><span>Create the room — <b>code + QR</b> appear in the side rail</span></div>
+      <div class="gstep"><b>02</b><span>Teams check in on their terminals, then <b>Arm</b> each question</span></div>
+      <div class="gstep"><b>03</b><span>Read the spotlight, <b>Next</b> to move on, <b>Present</b> for projector</span></div>
+    </div>
+    <div class="field"><label>Team capacity</label>
+      <select id="maxTeams"><option>8</option><option>10</option><option>12</option><option selected>16</option><option>20</option></select>
+    </div>
+    <div class="btnrow" style="margin-top:16px"><button class="btn go" id="createBtn">Create room</button></div>
+    <div class="field" style="margin-top:22px"><label>Reclaim after refresh</label></div>
+    <div class="btnrow"><input id="rejoinCode" class="mono" placeholder="XXXXX" maxlength="5" style="text-transform:uppercase"/><button class="btn plain" id="rejoinBtn" style="flex:0 0 150px">Reclaim</button></div>
+  </div>
+
+  <div id="studio" class="studio" style="display:none">
+    <aside class="rail">
+      <section class="panel">
+        <div class="kicker">State</div>
+        <div class="stateword locked" id="stateWord">LOCKED</div>
+        <div class="statesub" id="stateSub">Awaiting arm</div>
+        <div class="qline"><span class="k">Question</span><span class="qn" id="qNum">–</span></div>
+        <div class="qline"><span class="k">Room</span><span class="roomcode" id="roomCode">–––––</span></div>
+      </section>
+      <section class="panel">
+        <div class="kicker">Control deck</div>
+        <button class="btn go" id="armBtn" style="padding:17px">Arm buzzer</button>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn plain" id="lockBtn">Lock</button>
+          <button class="btn plain" id="nextBtn">Next</button>
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn warn" id="resetBtn">Reset</button>
+          <button class="btn plain" id="presentBtn">Present</button>
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn plain small" id="soundBtn">Sound on</button>
+          <button class="btn plain small" id="voiceBtn">Voice on</button>
+          <button class="btn plain small" id="fullBtn">Full</button>
+        </div>
+        <p class="note" style="margin:12px 0 0"><span class="keys">Space</span> arm / lock &nbsp; <span class="keys">N</span> next &nbsp; <span class="keys">R</span> reset. Arming clears the previous standings.</p>
+      </section>
+      <section class="panel">
+        <div class="kicker">Team entry</div>
+        <div class="qrrow">
+          <img id="qr" alt="Join QR code"/>
+          <div>
+            <div class="note">Scan to open the buzzer, or type the address.</div>
+            <div class="joinlist" style="margin-top:8px"><span class="prime" id="joinLink">—</span></div>
+          </div>
+        </div>
+        <div class="joinlist" id="joinUrls" style="margin-top:10px"></div>
+      </section>
+      <section class="panel">
+        <div class="kicker">Companion vault · off projector</div>
+        <p class="note">Remote address: <b class="mono" id="companionHint">/companion.html</b>. Code plus PIN required.</p>
+        <div class="pin" id="compPin">····</div>
+        <div class="btnrow" style="margin-top:10px"><button class="btn plain small" id="revealPin">Reveal PIN</button></div>
+        <div class="seclog" id="secLog"></div>
+      </section>
+    </aside>
+
+    <main>
+      <section class="spot" id="spot">
+        <div class="kicker" id="spotKicker" style="margin-bottom:0">Standby</div>
+        <div class="s-name" id="spotName">Awaiting first buzz</div>
+        <div class="s-meta" id="spotMargin">ARM THE BUZZER TO OPEN THE QUESTION</div>
+      </section>
+
+      <section class="panel" style="margin-top:14px">
+        <div class="kicker">Standings · delay-compensated <span class="buzzcount" id="buzzCount"></span><span id="teamCount" style="margin-left:10px"></span></div>
+        <div class="meter"><i id="buzzMeter"></i></div>
+        <div style="overflow-x:auto">
+        <table class="board">
+          <thead><tr><th>Pos</th><th>Team</th><th>Press time</th><th>Margin</th><th>Link</th></tr></thead>
+          <tbody id="rankBody"></tbody>
+        </table>
+        </div>
+        <p class="note" id="emptyHint" style="margin:12px 0 0">No presses this question. Times corrected per device; margins relative to P1.</p>
+      </section>
+
+      <section style="margin-top:14px">
+        <div class="kicker">Roster · select × to remove</div>
+        <div class="roster" id="roster"></div>
+      </section>
+    </main>
+  </div>
+
+  <footer>BUZZ ARENA · timing host · all press times corrected per-device · <span id="footRoom"></span></footer>
+</div>
+<div class="toast" id="toast"></div>
+<canvas id="fx"></canvas>
+<script src="/js/host.js"></script>
+</body>
+</html>

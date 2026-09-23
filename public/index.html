@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Buzz Arena — Quiz Timing System</title>
+<link rel="stylesheet" href="/css/arena.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta name="theme-color" content="#0a0c0e"/>
+</head>
+<body>
+<div class="wrap">
+  <header class="strip">
+    <div class="cell">
+      <div class="brandline"><span class="brandmark">B</span><span class="brandname">BUZZ ARENA</span></div>
+      <span class="k">Quiz timing system</span>
+    </div>
+    <div class="cell"><span class="k">Capacity</span><span class="v">8–20 teams</span></div>
+    <div class="cell"><span class="k">Timing</span><span class="v">Compensated</span></div>
+  </header>
+
+  <div class="kicker">Event buzzer system</div>
+  <h1 class="title">First press wins.<br/><span class="thin">Measured to the millisecond.</span></h1>
+  <p class="sub">One machine hosts the timing. Up to twenty team terminals buzz in. Every press is corrected for its own delay and ranked live — with a PIN-gated remote for the quizmaster.</p>
+
+  <div class="path" onclick="location.href='/host.html'">
+    <span class="p-num">01</span>
+    <div><h3>Host console</h3><p>Room code, QR entry, control deck, spotlight and standings. Projector-safe present mode.</p></div>
+    <span class="p-go">OPEN →</span>
+  </div>
+  <div class="path" onclick="location.href='/play.html'">
+    <span class="p-num">02</span>
+    <div><h3>Team terminal</h3><p>Phones and tablets. One terminal per team of two — dial, haptics, live placement.</p></div>
+    <span class="p-go">JOIN →</span>
+  </div>
+  <div class="path" onclick="location.href='/companion.html'">
+    <span class="p-num">03</span>
+    <div><h3>Quizmaster remote</h3><p>Arm, lock and advance from a phone. Separate PIN, lockouts, host alerts.</p></div>
+    <span class="p-go">UNLOCK →</span>
+  </div>
+
+  <div class="spec">
+    <div class="panel"><h4>Fairness model</h4><p>Terminal clocks sync against the host; presses rank by corrected time. RTT and offset shown per team.</p></div>
+    <div class="panel"><h4>Running the night</h4><p>Same network, foreground tabs, one practice question. <span class="keys">Space</span> arms and locks.</p></div>
+    <div class="panel"><h4>Self-hosted</h4><p><span class="mono">npm install &amp;&amp; npm start</span>. <span class="mono">PUBLIC_URL</span> optional — links and QR resolve automatically.</p></div>
+  </div>
+
+  <footer>BUZZ ARENA · v3 timing-gate build</footer>
+</div>
+</body>
+</html>

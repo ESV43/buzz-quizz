@@ -1,0 +1,292 @@
+/* Host console — broadcast layout render layer. Protocol unchanged. */
+const socket = io({ transports: ['websocket', 'polling'], reconnectionDelay: 400, reconnectionDelayMax: 3500 });
+const $ = (id) => document.getElementById(id);
+let roomCode = null, soundOn = true, voiceOn = true, lastWinnerId = null;
+let actx = null;
+
+if (new URLSearchParams(location.search).get('present') === '1') document.body.classList.add('present');
+
+async function keepAwake() { try { await navigator.wakeLock?.request('screen'); } catch {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+keepAwake();
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2600); }
+function ac() {
+  try {
+    actx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch { return null; }
+}
+function buzzSound() {
+  if (!soundOn) return;
+  const ctx = ac(); if (!ctx) return;
+  try {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sawtooth'; o.frequency.value = 196;
+    g.gain.setValueAtTime(0.3, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+    o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.65);
+  } catch {}
+}
+function speak(text) {
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; speechSynthesis.speak(u); } catch {}
+}
+
+/* canvas celebration FX */
+const fx = $('fx'), fctx = fx.getContext('2d');
+let parts = [], fxRun = false;
+function sizeFx() { fx.width = innerWidth; fx.height = innerHeight; }
+addEventListener('resize', sizeFx); sizeFx();
+function confettiBurst() {
+  const cols = ['#d9a441', '#edeff2', '#626b77', '#34d17b'];
+  for (let i = 0; i < 130; i++) parts.push({
+    x: innerWidth / 2 + (Math.random() - .5) * 260, y: innerHeight * 0.28,
+    vx: (Math.random() - .5) * 9, vy: -Math.random() * 9 - 3, g: .26,
+    w: 3 + Math.random() * 3, h: 7 + Math.random() * 8,
+    r: Math.random() * Math.PI, vr: (Math.random() - .5) * .3,
+    c: cols[i % 4], life: 80 + Math.random() * 45,
+  });
+  if (!fxRun) { fxRun = true; requestAnimationFrame(fxTick); }
+}
+function fxTick() {
+  fctx.clearRect(0, 0, fx.width, fx.height);
+  parts = parts.filter((p) => p.life > 0 && p.y < innerHeight + 30);
+  for (const p of parts) {
+    p.vy += p.g; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.life--;
+    fctx.save(); fctx.translate(p.x, p.y); fctx.rotate(p.r);
+    fctx.globalAlpha = Math.min(1, p.life / 40); fctx.fillStyle = p.c;
+    fctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); fctx.restore();
+  }
+  if (parts.length) requestAnimationFrame(fxTick);
+  else { fxRun = false; fctx.clearRect(0, 0, fx.width, fx.height); }
+}
+
+async function probe() {
+  if (!socket.connected) return;
+  const t0 = performance.now();
+  socket.emit('time-sync', { t0: Date.now() }, () => {
+    $('connPill').innerHTML = `<span class="livedot"></span>${Math.round(performance.now() - t0)} ms`;
+  });
+}
+socket.on('connect', probe);
+socket.on('disconnect', () => { $('connPill').innerHTML = '<span class="livedot idle"></span>Offline'; });
+setInterval(probe, 10000);
+
+$('createBtn').onclick = () => {
+  socket.emit('create-room', { maxTeams: parseInt($('maxTeams').value, 10) }, (res) => {
+    if (!res?.ok) return toast('Could not create room');
+    enterStudio(res.code, res);
+  });
+};
+$('rejoinBtn').onclick = () => {
+  const code = $('rejoinCode').value.trim().toUpperCase();
+  if (!code) return toast('Enter the room code');
+  socket.emit('host-rejoin', { code }, (res) => {
+    if (!res?.ok) return toast(res?.error || 'Room not found');
+    enterStudio(code, res); toast('Host session reclaimed');
+  });
+};
+function enterStudio(code, res) {
+  roomCode = code;
+  $('setup').style.display = 'none'; $('studio').style.display = 'grid';
+  $('roomCode').textContent = code;
+  $('roomCodeStrip').textContent = code.split('').join(' ');
+  $('footRoom').textContent = 'room ' + code;
+  if (res?.companionPin) $('compPin').textContent = res.companionPin;
+  if (res?.qr) $('qr').src = res.qr;
+  if (res?.joinUrls?.length) {
+    try {
+      const u = new URL(res.joinUrls[0]);
+      $('joinLink').textContent = u.host + u.pathname + '?room=' + code;
+    } catch { $('joinLink').textContent = res.joinUrls[0]; }
+    $('joinUrls').innerHTML = res.joinUrls.slice(1, 4).map((u) => `<div>${escapeHtml(u)}</div>`).join('');
+  }
+  if (res?.companionUrl) $('companionHint').textContent = res.companionUrl.replace(/^https?:\/\//, '');
+  try { localStorage.setItem('buzz-host-code', code); } catch {}
+  if (res?.state) renderAll(res);
+}
+try { const saved = localStorage.getItem('buzz-host-code'); if (saved) $('rejoinCode').value = saved; } catch {}
+
+$('revealPin').onclick = () => $('compPin').classList.toggle('open');
+$('presentBtn').onclick = (e) => {
+  const on = document.body.classList.toggle('present');
+  e.currentTarget.textContent = on ? 'Console' : 'Present';
+  toast(on ? 'Present mode — rails hidden' : 'Console mode');
+};
+
+function control(action, extra = {}) {
+  if (!roomCode) return;
+  if (action === 'arm' || action === 'next') paintState(true, null);
+  else if (action === 'lock' || action === 'reset') paintState(false, null);
+  socket.emit('host-control', { action, ...extra }, (r) => { if (r && !r.ok) toast(r.error || 'Blocked'); });
+}
+$('armBtn').onclick = () => control('arm');
+$('lockBtn').onclick = () => control('lock');
+$('nextBtn').onclick = () => control('next');
+$('resetBtn').onclick = () => control('reset');
+$('soundBtn').onclick = (e) => { soundOn = !soundOn; e.currentTarget.textContent = `Sound ${soundOn ? 'on' : 'off'}`; };
+$('voiceBtn').onclick = (e) => { voiceOn = !voiceOn; e.currentTarget.textContent = `Voice ${voiceOn ? 'on' : 'off'}`; };
+document.addEventListener('keydown', (e) => {
+  if ($('studio').style.display === 'none') return;
+  if (e.code === 'Space') { e.preventDefault(); control($('stateWord').classList.contains('live') ? 'lock' : 'arm'); }
+  else if (e.key === 'a' || e.key === 'A') control('arm');
+  else if (e.key === 'l' || e.key === 'L') control('lock');
+  else if (e.key === 'n' || e.key === 'N') control('next');
+  else if (e.key === 'r' || e.key === 'R') control('reset');
+});
+
+/* coalesced rendering: N socket events per frame => one paint */
+let pendingRoom = null, pendingBuzz = null, rafQueued = false;
+socket.on('room-update', (d) => { pendingRoom = d; queueRender(); });
+socket.on('buzz-update', (d) => { pendingBuzz = d; queueRender(); });
+function queueRender() {
+  if (rafQueued) return;
+  rafQueued = true;
+  requestAnimationFrame(() => {
+    rafQueued = false;
+    const r = pendingRoom, b = pendingBuzz;
+    pendingRoom = pendingBuzz = null;
+    if (r) renderAll(r);
+    else if (b) renderRanks(b.buzzes, b.armed, b.questionNo);
+  });
+}
+socket.on('control-event', (d) => { if (d?.questionNo) setQ(d.questionNo); });
+socket.on('security-alert', (d) => { $('secLog').innerHTML += `<div>Security — ${escapeHtml(d.msg)} <span class="mono">${new Date().toLocaleTimeString()}</span></div>`; });
+
+$('roster').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-kick]');
+  if (!b) return;
+  e.stopPropagation();
+  socket.emit('kick-team', { teamId: b.dataset.kick }, (r) => { if (!r?.ok) toast('Cannot remove team'); });
+});
+
+function setQ(n) {
+  const t = String(n ?? '–');
+  if ($('qNum')._last !== t) { $('qNum')._last = t; $('qNum').textContent = t; }
+  if ($('qNumStrip')._last !== t) { $('qNumStrip')._last = t; $('qNumStrip').textContent = 'Q' + t; }
+}
+function paintState(armedNow, q) {
+  const w = $('stateWord');
+  w.classList.toggle('live', !!armedNow);
+  w.classList.toggle('locked', !armedNow);
+  w.textContent = armedNow ? 'LIVE' : 'LOCKED';
+  $('stateSub').textContent = armedNow
+    ? (q ? `Question ${q} — accepting presses` : 'Accepting presses')
+    : (q ? `Question ${q} closed` : 'Awaiting arm');
+  if (q != null) setQ(q);
+}
+
+function renderAll({ teams, state }) {
+  const tc = `${teams.length} TEAMS`;
+  if ($('teamCount')._last !== tc) { $('teamCount')._last = tc; $('teamCount').textContent = tc; }
+  paintState(state.armed, state.questionNo);
+  renderRoster(teams, state.buzzes);
+  renderRanks(state.buzzes, state.armed, state.questionNo);
+}
+
+/* keyed roster with FLIP reorder */
+const rosEls = new Map(), rosHtml = new Map();
+function renderRoster(teams, buzzes = []) {
+  const box = $('roster');
+  const byId = Object.fromEntries(buzzes.map((x) => [x.teamId, x]));
+  const sorted = [...teams].sort((a, b) => (byId[a.id]?.rank ?? 99) - (byId[b.id]?.rank ?? 99));
+  const first = new Map();
+  for (const [id, el] of rosEls) if (el.isConnected) first.set(id, el.getBoundingClientRect().top);
+  const alive = new Set();
+  for (const t of sorted) {
+    alive.add(t.id);
+    const bz = byId[t.id];
+    let el = rosEls.get(t.id);
+    if (!el) { el = document.createElement('div'); rosEls.set(t.id, el); box.appendChild(el); }
+    const html = `<span class="bar"></span><span class="nm">${escapeHtml(t.name)}</span>`
+      + `${bz && bz.rank <= 3 ? `<span class="pos">P${bz.rank}</span>` : ''}`
+      + `${bz && bz.rank > 3 ? `<span class="mg">+${bz.deltaMs}</span>` : ''}`
+      + `<span class="st ${t.connected ? 'in' : ''}">${t.connected ? 'IN' : 'OUT'} · ${t.rtt ?? '–'}</span>`
+      + `<button class="rm" data-kick="${t.id}" title="Remove team">×</button>`;
+    if (rosHtml.get(t.id) !== html) {
+      rosHtml.set(t.id, html);
+      el.className = 'rrow';
+      el.style.setProperty('--c', t.color);
+      el.innerHTML = html;
+    }
+  }
+  for (const [id, el] of [...rosEls]) if (!alive.has(id)) { el.remove(); rosEls.delete(id); rosHtml.delete(id); }
+  for (const t of sorted) box.appendChild(rosEls.get(t.id));
+  for (const [id, el] of rosEls) {
+    const f = first.get(id);
+    if (f == null) continue;
+    const d = f - el.getBoundingClientRect().top;
+    if (d) {
+      el.style.transition = 'none';
+      el.style.transform = `translateY(${d}px)`;
+      requestAnimationFrame(() => { el.style.transition = ''; el.style.transform = ''; });
+    }
+  }
+}
+
+/* spotlight + keyed standings */
+const rankRows = new Map(), rankHtml = new Map();
+let lastSpotKey = null, lastEmpty = null;
+function renderRanks(buzzes = [], armed, q) {
+  if (q != null) setQ(q);
+  const empty = !buzzes.length;
+  if (lastEmpty !== empty) { lastEmpty = empty; $('emptyHint').style.display = empty ? 'block' : 'none'; }
+  const w = buzzes[0] || null;
+  const skey = w ? w.teamId + ':' + (q ?? '') : 'empty:' + (q ?? '') + ':' + (armed ? 'a' : 'l');
+  if (skey !== lastSpotKey) {
+    lastSpotKey = skey;
+    $('spot').classList.toggle('has-winner', !!w);
+    if (!w) {
+      $('spotKicker').textContent = armed ? `Question ${q} — open` : 'Standby';
+      $('spotName').textContent = 'Awaiting first buzz';
+      $('spotMargin').textContent = armed ? 'BUZZERS LIVE — FIRST VALID PRESS TAKES P1' : 'ARM THE BUZZER TO OPEN THE QUESTION';
+    } else {
+      $('spotKicker').textContent = `Question ${q} — first buzz`;
+      $('spotName').textContent = w.teamName;
+      $('spotMargin').innerHTML = `MARGIN <b>+0 MS</b> · CORRECTED · LINK ${w.rtt ?? '–'} MS`;
+    }
+  }
+  const tb = $('rankBody');
+  if (empty) {
+    if (tb._emptied !== true) { tb._emptied = true; tb.innerHTML = ''; }
+    for (const [, tr] of rankRows) tr.remove();
+    rankRows.clear(); rankHtml.clear();
+  } else {
+    tb._emptied = false;
+    const first = new Map();
+    for (const [id, tr] of rankRows) if (tr.isConnected) first.set(id, tr.getBoundingClientRect().top);
+    const alive = new Set();
+    for (const b of buzzes) {
+      alive.add(b.teamId);
+      let tr = rankRows.get(b.teamId);
+      if (!tr) { tr = document.createElement('tr'); rankRows.set(b.teamId, tr); tb.appendChild(tr); }
+      const t = new Date(b.adjustedTime);
+      const html = `<td class="pos">P${b.rank}</td>`
+        + `<td><span class="tchip" style="background:${b.color}"></span><span class="tname">${escapeHtml(b.teamName)}</span></td>`
+        + `<td class="num">${t.toLocaleTimeString()}.${String(t.getMilliseconds()).padStart(3, '0')}</td>`
+        + `<td class="tmargin ${b.deltaMs === 0 ? 'first' : ''}">${b.deltaMs === 0 ? '+0 — P1' : '+' + b.deltaMs}</td>`
+        + `<td class="num" style="color:var(--faint)">${b.rtt ?? '–'} ms</td>`;
+      if (rankHtml.get(b.teamId) !== html) {
+        rankHtml.set(b.teamId, html);
+        tr.className = b.rank === 1 ? 'pos1' : '';
+        tr.innerHTML = html;
+      }
+    }
+    for (const [id, tr] of [...rankRows]) if (!alive.has(id)) { tr.remove(); rankRows.delete(id); rankHtml.delete(id); }
+    for (const b of buzzes) tb.appendChild(rankRows.get(b.teamId));
+    for (const [id, tr] of rankRows) {
+      const f = first.get(id);
+      if (f == null) continue;
+      const d = f - tr.getBoundingClientRect().top;
+      if (d) {
+        tr.style.transition = 'none';
+        tr.style.transform = `translateY(${d}px)`;
+        requestAnimationFrame(() => { tr.style.transition = ''; tr.style.transform = ''; });
+      }
+    }
+  }
+  if (w && w.teamId !== lastWinnerId) { lastWinnerId = w.teamId; buzzSound(); speak(`${w.teamName} buzzed first`); confettiBurst(); }
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
