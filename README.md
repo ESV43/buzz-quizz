@@ -33,7 +33,7 @@ npm start
 `time-sync` · `create-room {maxTeams, wantedCode?}` · `host-rejoin {code}` ·
 `join-as-player {code, teamName, teamId?, offset, rtt}` · `update-netstats` ·
 `focus-status {away}` · `rename-team {name}` · `buzz {clientPressTime, offset, rtt}` ·
-`host-control {action: arm|lock|reset|next|clear}` · `kick-team {teamId}` ·
+`host-control {action: arm|lock|reset|next|clear|present}` · `kick-team {teamId}` ·
 `join-as-companion {code, pin}` → events `room-update` (teams carry
 `connected` + `away`), `buzz-update`, `control-event`, `kicked`,
 `security-alert`, `focus-alert {teamId, teamName, away}`, `netstats`.
@@ -47,6 +47,6 @@ Focus state never gates buzzing — it only flags the team for host/companion.
 - Fairness: 8-sample median clock sync per buzzer; ranking by
   `clientPress + offset`, with RTT/offset shown per team.
 - Companion: separate 4-digit PIN, 3 wrong tries → 30 s lockout + host alert,
-  restricted to arm / lock / reset / next / clear.
+  restricted to arm / lock / reset / next / clear / present (projector flip).
 - WakeLock keeps buzzer and remote screens on; multitouch-safe big button
   (one press per team per question).

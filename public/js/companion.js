@@ -43,6 +43,25 @@ $('unlock').onclick = () => {
 function ctl(a) { socket.emit('host-control', { action: a }, (r) => { if (r && !r.ok) toast(r.error || 'Blocked'); else try { navigator.vibrate?.(30); } catch {} }); }
 $('arm').onclick = () => ctl('arm'); $('lock').onclick = () => ctl('lock');
 $('next').onclick = () => ctl('next');
+// projector flip on the host screen — applied on ack, synced from host flips too
+let projectorPresent = false;
+function paintPresent() {
+  const b = $('present');
+  if (b) b.textContent = projectorPresent ? 'Projector: present' : 'Projector: console';
+}
+$('present').onclick = () => {
+  const next = !projectorPresent;
+  socket.emit('host-control', { action: 'present', on: next }, (r) => {
+    if (r && !r.ok) { toast(r.error || 'Blocked'); return; }
+    projectorPresent = next; paintPresent();
+    try { navigator.vibrate?.(30); } catch {}
+  });
+};
+socket.on('control-event', (d) => {
+  if (d?.action === 'present' && typeof d?.on === 'boolean') {
+    projectorPresent = d.on; paintPresent();
+  }
+});
 let cresetArmed = false, cresetT = null;
 $('reset').onclick = (e) => {
   const b = e.currentTarget;

@@ -169,10 +169,15 @@ function setPresent(on) {
   if (b) b.textContent = on ? 'Console' : 'Present';
   toast(on ? 'Present mode — rails hidden (Esc to exit)' : 'Console mode');
 }
-$('presentBtn').onclick = () => setPresent(!document.body.classList.contains('present'));
-$('exitPresent').onclick = () => setPresent(false);
+// projector state is shared: local flips broadcast so the companion label stays in sync
+function requestPresent(on) {
+  setPresent(on);
+  if (roomCode && socket.connected) socket.emit('host-control', { action: 'present', on: !!on }, () => {});
+}
+$('presentBtn').onclick = () => requestPresent(!document.body.classList.contains('present'));
+$('exitPresent').onclick = () => requestPresent(false);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.body.classList.contains('present')) setPresent(false);
+  if (e.key === 'Escape' && document.body.classList.contains('present')) requestPresent(false);
 });
 // Host can intentionally hide QR codes + links (projector privacy).
 // Both panels mask independently; state persists per session only.
@@ -255,6 +260,10 @@ function queueRender() {
 socket.on('control-event', (d) => {
   if (d?.questionNo) setQ(d.questionNo);
   if (d?.action === 'arm' || d?.action === 'next') flashSpot();
+  // projector flip from the companion remote (own echo is a no-op — no double toast)
+  if (d?.action === 'present' && typeof d?.on === 'boolean') {
+    if (document.body.classList.contains('present') !== d.on) setPresent(d.on);
+  }
 });
 socket.on('security-alert', (d) => { $('secLog').innerHTML += `<div>Security — ${escapeHtml(d.msg)} <span class="mono">${new Date().toLocaleTimeString()}</span></div>`; });
 socket.on('focus-alert', (d) => {

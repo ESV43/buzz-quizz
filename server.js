@@ -324,20 +324,22 @@ io.on('connection', (socket) => {
     } else if (action === 'clear') {
       room.state.buzzes = [];
     }
+    // 'present' is display-only (projector on the host screen) — no room state,
+    // just relayed below so any controller can flip it.
   }
 
   socket.on('host-control', ({ action, ...extra }, cb) => {
     const gate = requireControl();
     if (!gate.ok) return cb?.(gate);
     const room = gate.room;
-    if (socket.data.role === 'companion' && !['arm', 'lock', 'reset', 'next', 'clear'].includes(action)) {
-      return cb?.({ ok: false, error: 'Companions can only arm / lock / reset.' });
+    if (socket.data.role === 'companion' && !['arm', 'lock', 'reset', 'next', 'clear', 'present'].includes(action)) {
+      return cb?.({ ok: false, error: 'Companions can only arm / lock / reset / present.' });
     }
     doControl(action, room, extra);
     cb?.({ ok: true, state: publicState(room) });
     broadcastRoom(room);
     io.to(room.code).emit('buzz-update', { buzzes: room.state.buzzes, armed: room.state.armed, questionNo: room.state.questionNo });
-    io.to(room.code).emit('control-event', { action, questionNo: room.state.questionNo });
+    io.to(room.code).emit('control-event', { action, questionNo: room.state.questionNo, on: extra.on ?? null });
   });
 
   socket.on('kick-team', ({ teamId }, cb) => {
