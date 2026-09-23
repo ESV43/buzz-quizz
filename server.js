@@ -180,19 +180,27 @@ io.on('connection', (socket) => {
   });
 
   // ---- PLAYER: join ----
-  socket.on('join-as-player', ({ code, teamName, offset, rtt }, cb) => {
+  socket.on('join-as-player', ({ code, teamName, teamId: knownId, offset, rtt }, cb) => {
     code = String(code || '').toUpperCase().trim();
     const room = rooms.get(code);
     if (!room) return cb?.({ ok: false, error: 'Room code not found. Check with the host.' });
-    if (room.teams.size >= room.maxTeams && !room.socketToTeam.has(socket.id)) {
+    // Reattach path: returning tab / reconnected socket reclaims its old team
+    // instead of spawning a duplicate — allowed even when the room is full.
+    let teamId = (typeof knownId === 'string' && room.teams.has(knownId)) ? knownId : room.socketToTeam.get(socket.id);
+    const isReattach = !!teamId && room.teams.has(teamId);
+    if (!isReattach && room.teams.size >= room.maxTeams) {
       return cb?.({ ok: false, error: `Room full (${room.maxTeams} teams).` });
     }
-    let teamId = room.socketToTeam.get(socket.id);
     let team;
-    if (teamId && room.teams.has(teamId)) {
+    if (isReattach) {
       team = room.teams.get(teamId);
+      // drop stale mappings for this team (dead sockets) — last socket wins
+      for (const [sid, tid] of [...room.socketToTeam.entries()]) if (tid === teamId && sid !== socket.id) room.socketToTeam.delete(sid);
+      room.socketToTeam.set(socket.id, teamId);
       team.connected = true;
+      team.away = false; // back in the app — never block buzzing on focus state
       team.socketId = socket.id;
+      team.lastSeen = Date.now();
       if (typeof teamName === 'string' && teamName.trim()) team.name = teamName.trim().slice(0, 24);
     } else {
       teamId = 'T' + Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -334,8 +342,10 @@ io.on('connection', (socket) => {
 
   socket.on('kick-team', ({ teamId }, cb) => {
     const room = rooms.get(socket.data.roomCode);
-    if (!room || socket.data.role !== 'host' || room.hostId !== socket.id) return cb?.({ ok: false });
-    if (!room.teams.has(teamId)) return cb?.({ ok: false });
+    if (!room || socket.data.role !== 'host' || room.hostId !== socket.id) {
+      return cb?.({ ok: false, error: 'Host session expired (reconnect?) — reclaim the room and retry.' });
+    }
+    if (!room.teams.has(teamId)) return cb?.({ ok: false, error: 'Team already gone.' });
     room.teams.delete(teamId);
     for (const [sid, tid] of [...room.socketToTeam.entries()]) if (tid === teamId) room.socketToTeam.delete(sid);
     room.state.buzzes = room.state.buzzes.filter((b) => b.teamId !== teamId);

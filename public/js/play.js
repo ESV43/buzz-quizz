@@ -23,10 +23,14 @@ function reportFocus() {
   if (away === lastAway) return;
   lastAway = away;
   if (team) socket.emit('focus-status', { away });
-  if (!away) toast('Back on buzzer');
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') { keepAwake(); syncClock(); }
+  if (document.visibilityState === 'visible') {
+    keepAwake(); syncClock();
+    // returning from another app: socket may be stale even if `connected`
+    // looks alive — throttled silent rejoin restores live arm/buzz state.
+    if (team && roomCode && socket.connected) rejoin(true);
+  }
   reportFocus();
 });
 window.addEventListener('blur', () => { if (team && !lastAway) { lastAway = true; socket.emit('focus-status', { away: true }); } });
@@ -65,26 +69,64 @@ socket.on('connect', () => { syncClock(); });
 socket.on('disconnect', () => { $('connBar').classList.add('show'); toast('Connection lost — reconnecting'); });
 socket.on('connect', () => {
   if ($('connBar').classList.contains('show')) { $('connBar').classList.remove('show'); toast('Reconnected'); }
+  // socket may have died while the tab was backgrounded — reclaim the same
+  // team (no duplicate) and pull fresh state so arm/buzzes are current.
+  if (team && roomCode) rejoin(true);
 });
 (function scheduleSync() {
   setTimeout(() => { if (team) syncClock(); scheduleSync(); }, 20000 + Math.random() * 8000);
 })();
 
-/* join */
+/* join — teamId reattach means refresh/return never duplicates the team */
+function storedTeamId() { try { return localStorage.getItem('buzz-team-id') || null; } catch { return null; } }
+/* silent rejoin: reclaim the same team + fresh state (never blocks buzzing) */
+function rejoin(silent) {
+  if (!team || !roomCode || !socket.connected) return;
+  const now = Date.now();
+  if (silent && now - (rejoin._last || 0) < 3000) return;
+  rejoin._last = now;
+  socket.emit('join-as-player', {
+    code: roomCode, teamName: team.name, teamId: team.id,
+    offset: Math.round(clockOffset), rtt,
+  }, (res) => {
+    if (!res?.ok) {
+      // room gone or team kicked while away — drop back to check-in
+      team = null; myBuzz = null;
+      try { localStorage.removeItem('buzz-team-id'); } catch {}
+      $('playView').style.display = 'none'; $('joinView').style.display = 'block';
+      $('joinErr').textContent = res?.error || 'Session lost — join again.';
+      return;
+    }
+    team = res.team; lastAway = false;
+    try { localStorage.setItem('buzz-name', team.name); } catch {}
+    applyTeam();
+    if (res.state) {
+      // restore own placement even mid-question (onRoomUpdate only does this on Q change)
+      myBuzz = (res.state.buzzes || []).find((b) => b.teamId === team.id) || null;
+      onRoomUpdate({ teams: [], state: res.state });
+      if (myBuzz) renderMine();
+    }
+    if (!silent) toast(`Checked in as ${team.name}`);
+  });
+}
 $('joinBtn').onclick = () => {
   roomCode = $('roomInput').value.trim().toUpperCase();
   const teamName = $('nameInput').value.trim() || 'Team';
   if (roomCode.length < 4) return $('joinErr').textContent = 'Enter the 5-letter code from the host display.';
   $('joinBtn').disabled = true;
-  socket.emit('join-as-player', { code: roomCode, teamName, offset: Math.round(clockOffset), rtt }, (res) => {
+  socket.emit('join-as-player', { code: roomCode, teamName, teamId: storedTeamId(), offset: Math.round(clockOffset), rtt }, (res) => {
     $('joinBtn').disabled = false;
     if (!res?.ok) { $('joinErr').textContent = res?.error || 'Join failed'; return; }
-    team = res.team;
-    try { localStorage.setItem('buzz-room', roomCode); localStorage.setItem('buzz-name', team.name); } catch {}
+    team = res.team; lastAway = false;
+    try { localStorage.setItem('buzz-room', roomCode); localStorage.setItem('buzz-name', team.name); localStorage.setItem('buzz-team-id', team.id); } catch {}
     $('joinView').style.display = 'none'; $('playView').style.display = 'block';
     $('roomTag').textContent = roomCode.split('').join(' ');
     applyTeam(); syncClock(); keepAwake();
-    if (res.state) onRoomUpdate({ teams: [], state: res.state });
+    if (res.state) {
+      myBuzz = (res.state.buzzes || []).find((b) => b.teamId === team.id) || null;
+      onRoomUpdate({ teams: [], state: res.state });
+      if (myBuzz) renderMine();
+    }
     toast(`Checked in as ${team.name}`);
   });
 };

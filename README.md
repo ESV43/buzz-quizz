@@ -30,12 +30,17 @@ npm start
 
 ## Protocol (unchanged from v2 server)
 
-`time-sync` · `create-room {maxTeams}` · `host-rejoin {code}` ·
-`join-as-player {code, teamName, offset, rtt}` · `update-netstats` ·
-`rename-team {name}` · `buzz {clientPressTime, offset, rtt}` ·
+`time-sync` · `create-room {maxTeams, wantedCode?}` · `host-rejoin {code}` ·
+`join-as-player {code, teamName, teamId?, offset, rtt}` · `update-netstats` ·
+`focus-status {away}` · `rename-team {name}` · `buzz {clientPressTime, offset, rtt}` ·
 `host-control {action: arm|lock|reset|next|clear}` · `kick-team {teamId}` ·
-`join-as-companion {code, pin}` → events `room-update`, `buzz-update`,
-`control-event`, `kicked`, `security-alert`, `netstats`.
+`join-as-companion {code, pin}` → events `room-update` (teams carry
+`connected` + `away`), `buzz-update`, `control-event`, `kicked`,
+`security-alert`, `focus-alert {teamId, teamName, away}`, `netstats`.
+
+Sessions survive reconnects: players reattach by `teamId` (no duplicates,
+own buzz restored), host/companion silently reclaim authority on `connect`.
+Focus state never gates buzzing — it only flags the team for host/companion.
 
 ## Notes
 

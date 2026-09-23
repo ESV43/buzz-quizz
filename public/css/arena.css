@@ -236,6 +236,8 @@ body.present #exitPresent{display:block}
 .rrow .away{font-family:var(--fm); font-size:10px; letter-spacing:.14em; color:#0a0c0e;
   background:var(--gold); border-radius:5px; padding:2px 7px; white-space:nowrap}
 .rrow .st.away{color:var(--gold)}
+#awayList .awaytag{font-family:var(--fm); font-size:10px; letter-spacing:.14em; color:#fff;
+  background:var(--stop); border-radius:5px; padding:2px 7px; margin-left:auto; white-space:nowrap}
 /* buzzer click glow */
 #buzzBtn.hit{animation:buzzGlow .7s ease-out}
 .dial.hit .dial-ticks{animation:tickspin 24s linear infinite, glowSpin .7s ease-out}
@@ -284,3 +286,87 @@ table.board tr.fresh td{animation:rowFresh 1.4s ease}
 .guide .gstep:last-child{border-bottom:0}
 .guide .gstep b{font-family:var(--fm); font-size:11px; color:var(--go); letter-spacing:.1em}
 .guide .gstep span b{color:var(--ink)}
+
+/* ---------- theme toggle ---------- */
+.theme-toggle{flex:none; background:transparent; border:1px solid var(--line); color:var(--muted);
+  border-radius:7px; font-family:var(--fm); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
+  padding:8px 12px; cursor:pointer; white-space:nowrap}
+.theme-toggle:hover{color:var(--ink); border-color:#3a424c}
+body.light .theme-toggle:hover{border-color:#b0b0b8}
+
+/* ---------- Sequoia light mode ---------- */
+/* macOS Sequoia light appearance: canvas #f5f5f7, frosted white panels,
+   hairline grays, SF blue primary, deep green/red semantics for contrast. */
+body.light{
+  --bg:#f5f5f7;
+  --panel:#ffffff;
+  --panel-2:#f0f0f4;
+  --ink:#1d1d1f;
+  --muted:#6e6e73;
+  --faint:#86868b;
+  --line:#d2d2d7;
+  --line-soft:#e8e8ed;
+  --gold:#8a5a00;
+  --go:#1a7f37;
+  --stop:#d70015;
+  --accent:#0071e3;
+  color-scheme:light;
+  background:linear-gradient(180deg,#fafafc 0%,#f5f5f7 320px,#f5f5f7 100%);
+}
+body.light ::selection{background:#cce2fb}
+body.light .strip{background:rgba(245,245,247,.82)}
+body.light .brandmark{background:#1d1d1f; color:#f5f5f7}
+body.light .panel,.spot,.readout,.phead{background:rgba(255,255,255,.86);
+  -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
+  box-shadow:0 1px 2px rgba(0,0,0,.05),0 10px 28px rgba(0,0,0,.07)}
+body.light .spot::before{background:#d2d2d7}
+body.light .spot.has-winner::before{background:var(--gold)}
+body.light .btn{background:#fff; border-color:var(--line); color:var(--ink);
+  box-shadow:0 1px 2px rgba(0,0,0,.05)}
+body.light .btn:hover{border-color:#b0b0b8}
+body.light .btn.go{background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 4px 14px rgba(0,113,227,.28)}
+body.light .btn.go:hover{background:#0077ed}
+body.light .btn.plain{background:#fff}
+body.light .btn.warn{color:var(--stop); border-color:#f0b9be}
+body.light .btn.warn:hover{background:#fdf0f1}
+body.light .btn.confirm{border-color:var(--stop); color:var(--stop)}
+body.light input[type=text],body.light input[type=password],body.light input:not([type]),body.light select{background:#fff; border-color:var(--line); color:var(--ink)}
+body.light input:focus,body.light select:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,113,227,.18)}
+body.light .keys{background:#fff; border-color:var(--line); color:var(--muted)}
+body.light .pin{border-color:#c7c7cc}
+body.light .qrrow img{border:1px solid var(--line-soft); box-shadow:0 1px 2px rgba(0,0,0,.06)}
+body.light table.board tr.pos1 td{background:rgba(138,90,0,.07)}
+body.light table.board tr.fresh td{animation:rowFreshLight 1.4s ease}
+@keyframes rowFreshLight{0%{background:rgba(0,113,227,.16)}100%{background:transparent}}
+body.light .rrow{background:#fff}
+body.light .roster{background:var(--line-soft)}
+body.light .rrow .pos{color:var(--gold); border-color:#e2cfa0}
+body.light .rrow .away{background:#ff9f0a; color:#fff}
+body.light .meter{background:#e8e8ed}
+body.light .meter>i{background:linear-gradient(90deg,#1a7f37,#4cc38a)}
+body.light .dial-ticks{background:repeating-conic-gradient(rgba(0,0,0,.20) 0deg .7deg, transparent .7deg 9deg);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  mask:radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px))}
+body.light #buzzBtn{background:radial-gradient(circle at 50% 30%, #ffffff 0%, #f2f2f6 58%, #e4e4ea 100%);
+  border-color:#c7c7cc; color:var(--faint);
+  box-shadow:0 20px 44px rgba(0,0,0,.12), inset 0 1px 0 #fff, inset 0 -14px 28px rgba(0,0,0,.06)}
+body.light #buzzBtn.armed{color:var(--ink); border-color:color-mix(in srgb, var(--team) 55%, #c7c7cc);
+  box-shadow:0 0 0 1px color-mix(in srgb, var(--team) 35%, transparent), 0 0 40px color-mix(in srgb, var(--team) 25%, transparent), 0 20px 44px rgba(0,0,0,.12), inset 0 1px 0 #fff}
+body.light #buzzBtn.sending{color:var(--muted)}
+body.light .readout.st-live .r-pos{color:var(--go)}
+body.light .readout.st-placed .r-pos{color:var(--gold)}
+body.light .orow .you{color:var(--go)}
+body.light .path:hover .p-go{border-color:#b0b0b8}
+body.light .guide .gstep{background:#fff}
+body.light .guide .gstep b{color:var(--go)}
+body.light .toast{background:#1d1d1f; color:#f5f5f7; border-color:#1d1d1f; box-shadow:0 10px 30px rgba(0,0,0,.25)}
+body.light #exitPresent{background:#fff; box-shadow:0 10px 30px rgba(0,0,0,.14)}
+body.light #connBar{background:#fff8e6; border-color:#e2cfa0; color:#8a5a00}
+body.light .nameedit{background:#fff; border-color:var(--accent); color:var(--ink)}
+body.light .mini-toggle:hover{border-color:#b0b0b8}
+body.light #teamGlow{opacity:.55}
+body.light .spot.flash{animation:spotFlashLight .8s ease}
+@keyframes spotFlashLight{0%{box-shadow:inset 0 0 0 2px var(--accent)}100%{box-shadow:inset 0 0 0 0 transparent}}
+body.light #edgeFlash.go{animation:edgeGoLight 1s ease}
+@keyframes edgeGoLight{0%{opacity:0; box-shadow:inset 0 0 0 3px var(--accent), inset 0 0 70px rgba(0,113,227,.25)}
+  25%{opacity:1}100%{opacity:0; box-shadow:inset 0 0 0 3px transparent, inset 0 0 70px transparent}}

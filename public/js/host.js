@@ -73,7 +73,26 @@ async function probe() {
 socket.on('connect', probe);
 let wasOffline = false;
 socket.on('disconnect', () => { wasOffline = true; $('connPill').innerHTML = '<span class="livedot idle"></span>Offline'; toast('Link lost — reconnecting'); });
-socket.on('connect', () => { if (wasOffline) { wasOffline = false; toast('Link restored'); } });
+socket.on('connect', () => {
+  if (wasOffline) { wasOffline = false; toast('Link restored'); }
+  // socket.id changed on reconnect — old hostId is dead, so silently reclaim
+  // authority (otherwise arm/kick fail with "Not authorized").
+  if (roomCode && $('studio').style.display !== 'none') {
+    socket.emit('host-rejoin', { code: roomCode }, (res) => {
+      if (!res?.ok) return toast(res?.error || 'Host session lost — reclaim the room');
+      enterStudio(res.code || roomCode, res);
+    });
+  }
+});
+// reclaim authority once, then retry the blocked action
+function reclaimOnce(retry) {
+  if (!roomCode || !socket.connected) return toast('Link lost — reconnecting');
+  socket.emit('host-rejoin', { code: roomCode }, (res) => {
+    if (!res?.ok) return toast(res?.error || 'Host session lost — reclaim the room');
+    enterStudio(res.code || roomCode, res);
+    retry();
+  });
+}
 setInterval(probe, 10000);
 
 $('createBtn').onclick = () => {
@@ -180,11 +199,16 @@ function flashSpot() {
   const s = $('spot');
   s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash');
 }
-function control(action, extra = {}) {
+function control(action, extra = {}, retried = false) {
   if (!roomCode) return;
   if (action === 'arm' || action === 'next') { paintState(true, null); flashSpot(); }
   else if (action === 'lock' || action === 'reset') paintState(false, null);
-  socket.emit('host-control', { action, ...extra }, (r) => { if (r && !r.ok) toast(r.error || 'Blocked'); });
+  socket.emit('host-control', { action, ...extra }, (r) => {
+    if (r && !r.ok && !retried && /authorized|room/i.test(r.error || '')) {
+      return reclaimOnce(() => control(action, extra, true));
+    }
+    if (r && !r.ok) toast(r.error || 'Blocked');
+  });
 }
 $('armBtn').onclick = () => control('arm');
 $('lockBtn').onclick = () => control('lock');
@@ -234,18 +258,26 @@ socket.on('control-event', (d) => {
 });
 socket.on('security-alert', (d) => { $('secLog').innerHTML += `<div>Security — ${escapeHtml(d.msg)} <span class="mono">${new Date().toLocaleTimeString()}</span></div>`; });
 socket.on('focus-alert', (d) => {
-  const msg = d?.away
-    ? `${d.teamName} left the buzzer tab/app`
-    : `${d.teamName} is back on the buzzer`;
+  if (!d?.away) return; // silent when the team is back — roster badge clears itself
+  const msg = `${d.teamName} left the buzzer tab/app`;
   $('secLog').innerHTML += `<div>Focus — ${escapeHtml(msg)} <span class="mono">${new Date().toLocaleTimeString()}</span></div>`;
   toast(msg);
+  buzzSound();
+  speak(`${d.teamName} left the buzzer`);
 });
 
 $('roster').addEventListener('click', (e) => {
   const b = e.target.closest('[data-kick]');
   if (!b) return;
   e.stopPropagation();
-  socket.emit('kick-team', { teamId: b.dataset.kick }, (r) => { if (!r?.ok) toast('Cannot remove team'); });
+  const teamId = b.dataset.kick;
+  const kick = (retried = false) => socket.emit('kick-team', { teamId }, (r) => {
+    if (r && !r.ok && !retried && /expired|authorized|room/i.test(r.error || '')) {
+      return reclaimOnce(() => kick(true));
+    }
+    if (!r?.ok) toast(r?.error || 'Cannot remove team');
+  });
+  kick();
 });
 
 function setQ(n) {
