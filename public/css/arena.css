@@ -54,7 +54,7 @@ a{color:inherit}
 @media(max-width:480px){.brandhero{gap:14px; padding:18px}.herologo{width:84px; height:84px; border-radius:18px}.qsihero{height:62px}.herodiv{min-height:76px}}
 footer{display:flex; align-items:center; justify-content:space-between; gap:12px}
 .qsifoot{height:30px; width:auto; border-radius:6px; flex:none; border:1px solid var(--line-soft); background:#fff}
-.qsihead{height:30px; width:auto; align-self:flex-start; border-radius:6px; background:#fff; border:1px solid var(--line-soft); margin-top:4px}
+.qsihead{height:48px; width:auto; align-self:flex-start; border-radius:8px; background:#fff; border:1px solid var(--line-soft); margin-top:6px}
 .livedot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--go); margin-right:7px; vertical-align:1px}
 .livedot.idle{background:var(--faint)}
 a.navlink{font-family:var(--fm); font-size:11px; letter-spacing:.2em; color:var(--muted); text-decoration:none; text-transform:uppercase}
