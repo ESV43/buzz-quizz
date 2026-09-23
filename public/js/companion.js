@@ -16,8 +16,23 @@ $('unlock').onclick = () => {
 };
 function ctl(a) { socket.emit('host-control', { action: a }, (r) => { if (r && !r.ok) toast(r.error || 'Blocked'); else try { navigator.vibrate?.(30); } catch {} }); }
 $('arm').onclick = () => ctl('arm'); $('lock').onclick = () => ctl('lock');
-$('next').onclick = () => ctl('next'); $('reset').onclick = () => ctl('reset');
+$('next').onclick = () => ctl('next');
+let cresetArmed = false, cresetT = null;
+$('reset').onclick = (e) => {
+  const b = e.currentTarget;
+  if (!cresetArmed) {
+    cresetArmed = true;
+    b.classList.add('confirm'); b.textContent = 'Confirm';
+    cresetT = setTimeout(() => { cresetArmed = false; b.classList.remove('confirm'); b.textContent = 'Reset'; }, 3000);
+  } else {
+    clearTimeout(cresetT);
+    cresetArmed = false; b.classList.remove('confirm'); b.textContent = 'Reset';
+    ctl('reset');
+  }
+};
 $('bye').onclick = () => location.reload();
+socket.on('disconnect', () => toast('Connection lost — reconnecting'));
+socket.on('connect', () => { if ($('remote').style.display !== 'none') toast('Reconnected'); });
 socket.on('room-update', ({ state }) => paint(state));
 socket.on('buzz-update', (d) => paint({ armed: d.armed, questionNo: d.questionNo, buzzes: d.buzzes }));
 function paint(state) {

@@ -71,7 +71,9 @@ async function probe() {
   });
 }
 socket.on('connect', probe);
-socket.on('disconnect', () => { $('connPill').innerHTML = '<span class="livedot idle"></span>Offline'; });
+let wasOffline = false;
+socket.on('disconnect', () => { wasOffline = true; $('connPill').innerHTML = '<span class="livedot idle"></span>Offline'; toast('Link lost — reconnecting'); });
+socket.on('connect', () => { if (wasOffline) { wasOffline = false; toast('Link restored'); } });
 setInterval(probe, 10000);
 
 $('createBtn').onclick = () => {
@@ -110,22 +112,42 @@ function enterStudio(code, res) {
 try { const saved = localStorage.getItem('buzz-host-code'); if (saved) $('rejoinCode').value = saved; } catch {}
 
 $('revealPin').onclick = () => $('compPin').classList.toggle('open');
+$('fullBtn').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => toast('Fullscreen blocked by browser'));
+};
 $('presentBtn').onclick = (e) => {
   const on = document.body.classList.toggle('present');
   e.currentTarget.textContent = on ? 'Console' : 'Present';
   toast(on ? 'Present mode — rails hidden' : 'Console mode');
 };
 
+function flashSpot() {
+  const s = $('spot');
+  s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash');
+}
 function control(action, extra = {}) {
   if (!roomCode) return;
-  if (action === 'arm' || action === 'next') paintState(true, null);
+  if (action === 'arm' || action === 'next') { paintState(true, null); flashSpot(); }
   else if (action === 'lock' || action === 'reset') paintState(false, null);
   socket.emit('host-control', { action, ...extra }, (r) => { if (r && !r.ok) toast(r.error || 'Blocked'); });
 }
 $('armBtn').onclick = () => control('arm');
 $('lockBtn').onclick = () => control('lock');
 $('nextBtn').onclick = () => control('next');
-$('resetBtn').onclick = () => control('reset');
+let resetArmed = false, resetT = null;
+$('resetBtn').onclick = (e) => {
+  const b = e.currentTarget;
+  if (!resetArmed) {
+    resetArmed = true;
+    b.classList.add('confirm'); b.textContent = 'Confirm';
+    resetT = setTimeout(() => { resetArmed = false; b.classList.remove('confirm'); b.textContent = 'Reset'; }, 3000);
+  } else {
+    clearTimeout(resetT);
+    resetArmed = false; b.classList.remove('confirm'); b.textContent = 'Reset';
+    control('reset');
+  }
+};
 $('soundBtn').onclick = (e) => { soundOn = !soundOn; e.currentTarget.textContent = `Sound ${soundOn ? 'on' : 'off'}`; };
 $('voiceBtn').onclick = (e) => { voiceOn = !voiceOn; e.currentTarget.textContent = `Voice ${voiceOn ? 'on' : 'off'}`; };
 document.addEventListener('keydown', (e) => {
@@ -152,7 +174,10 @@ function queueRender() {
     else if (b) renderRanks(b.buzzes, b.armed, b.questionNo);
   });
 }
-socket.on('control-event', (d) => { if (d?.questionNo) setQ(d.questionNo); });
+socket.on('control-event', (d) => {
+  if (d?.questionNo) setQ(d.questionNo);
+  if (d?.action === 'arm' || d?.action === 'next') flashSpot();
+});
 socket.on('security-alert', (d) => { $('secLog').innerHTML += `<div>Security — ${escapeHtml(d.msg)} <span class="mono">${new Date().toLocaleTimeString()}</span></div>`; });
 
 $('roster').addEventListener('click', (e) => {
@@ -182,8 +207,14 @@ function renderAll({ teams, state }) {
   const tc = `${teams.length} TEAMS`;
   if ($('teamCount')._last !== tc) { $('teamCount')._last = tc; $('teamCount').textContent = tc; }
   paintState(state.armed, state.questionNo);
+  paintProgress(teams.length, state.buzzes);
   renderRoster(teams, state.buzzes);
   renderRanks(state.buzzes, state.armed, state.questionNo);
+}
+function paintProgress(total, buzzes) {
+  const n = new Set((buzzes || []).map((b) => b.teamId)).size;
+  $('buzzCount').textContent = total ? `${n}/${total} IN` : '';
+  $('buzzMeter').style.width = total ? Math.round((n / total) * 100) + '%' : '0';
 }
 
 /* keyed roster with FLIP reorder */
@@ -229,6 +260,7 @@ function renderRoster(teams, buzzes = []) {
 /* spotlight + keyed standings */
 const rankRows = new Map(), rankHtml = new Map();
 let lastSpotKey = null, lastEmpty = null;
+const seenBuzz = new Set();
 function renderRanks(buzzes = [], armed, q) {
   if (q != null) setQ(q);
   const empty = !buzzes.length;
@@ -252,7 +284,7 @@ function renderRanks(buzzes = [], armed, q) {
   if (empty) {
     if (tb._emptied !== true) { tb._emptied = true; tb.innerHTML = ''; }
     for (const [, tr] of rankRows) tr.remove();
-    rankRows.clear(); rankHtml.clear();
+    rankRows.clear(); rankHtml.clear(); seenBuzz.clear();
   } else {
     tb._emptied = false;
     const first = new Map();
@@ -273,6 +305,7 @@ function renderRanks(buzzes = [], armed, q) {
         tr.className = b.rank === 1 ? 'pos1' : '';
         tr.innerHTML = html;
       }
+      if (!seenBuzz.has(b.teamId)) { seenBuzz.add(b.teamId); tr.classList.add('fresh'); }
     }
     for (const [id, tr] of [...rankRows]) if (!alive.has(id)) { tr.remove(); rankRows.delete(id); rankHtml.delete(id); }
     for (const b of buzzes) tb.appendChild(rankRows.get(b.teamId));
@@ -287,6 +320,11 @@ function renderRanks(buzzes = [], armed, q) {
       }
     }
   }
-  if (w && w.teamId !== lastWinnerId) { lastWinnerId = w.teamId; buzzSound(); speak(`${w.teamName} buzzed first`); confettiBurst(); }
+  if (w && w.teamId !== lastWinnerId) {
+    lastWinnerId = w.teamId;
+    buzzSound(); speak(`${w.teamName} buzzed first`); confettiBurst();
+    const sp = $('spot');
+    sp.classList.remove('pop'); void sp.offsetWidth; sp.classList.add('pop');
+  }
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
