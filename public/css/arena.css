@@ -218,6 +218,32 @@ body.present .rail, body.present .setuponly{display:none !important}
 body.present .studio{grid-template-columns:1fr}
 body.present .spot .s-name{font-size:clamp(44px,7vw,88px)}
 body.present .strip .hidenpresent{display:none}
+#exitPresent{display:none; position:fixed; right:16px; bottom:16px; z-index:80;
+  background:#161b21; color:var(--ink); border:1px solid var(--line); border-radius:8px;
+  font-family:var(--fm); font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+  padding:12px 16px; cursor:pointer}
+body.present #exitPresent{display:block}
+#exitPresent:hover{border-color:#3a424c}
+/* hide/show toggles for projector privacy */
+.mini-toggle{margin-left:auto; background:transparent; border:1px solid var(--line);
+  color:var(--muted); border-radius:6px; font-family:var(--fm); font-size:10px;
+  letter-spacing:.16em; text-transform:uppercase; padding:4px 10px; cursor:pointer}
+.mini-toggle:hover{color:var(--ink); border-color:#3a424c}
+.masked-note{color:var(--faint); font-size:12.5px}
+.kicker .mini-toggle{flex:none}
+.kicker::after{flex:1}
+/* away / tab-switch badge */
+.rrow .away{font-family:var(--fm); font-size:10px; letter-spacing:.14em; color:#0a0c0e;
+  background:var(--gold); border-radius:5px; padding:2px 7px; white-space:nowrap}
+.rrow .st.away{color:var(--gold)}
+/* buzzer click glow */
+#buzzBtn.hit{animation:buzzGlow .7s ease-out}
+.dial.hit .dial-ticks{animation:tickspin 24s linear infinite, glowSpin .7s ease-out}
+@keyframes buzzGlow{
+  0%{box-shadow:0 0 0 2px color-mix(in srgb, var(--team) 80%, white), 0 0 70px color-mix(in srgb, var(--team) 65%, transparent), 0 22px 60px rgba(0,0,0,.6)}
+  100%{box-shadow:0 22px 60px rgba(0,0,0,.6)}
+}
+@keyframes glowSpin{0%{filter:brightness(1.8)}100%{filter:brightness(1)}}
 
 /* ---------- fx + toast ---------- */
 #fx{position:fixed; inset:0; pointer-events:none; z-index:60}

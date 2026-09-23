@@ -77,22 +77,36 @@
         </div>
         <p class="note" style="margin:12px 0 0"><span class="keys">Space</span> arm / lock &nbsp; <span class="keys">N</span> next &nbsp; <span class="keys">R</span> reset. Arming clears the previous standings.</p>
       </section>
-      <section class="panel">
-        <div class="kicker">Team entry</div>
-        <div class="qrrow">
-          <img id="qr" alt="Join QR code"/>
-          <div>
-            <div class="note">Scan to open the buzzer, or type the address.</div>
-            <div class="joinlist" style="margin-top:8px"><span class="prime" id="joinLink">—</span></div>
+      <section class="panel" id="joinPanel">
+        <div class="kicker">Team entry <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
+        <div id="joinSecrets">
+          <div class="qrrow">
+            <img id="qr" alt="Join QR code"/>
+            <div>
+              <div class="note">Scan to open the buzzer, or type the address.</div>
+              <div class="joinlist" style="margin-top:8px"><span class="prime" id="joinLink">—</span></div>
+            </div>
           </div>
+          <div class="joinlist" id="joinUrls" style="margin-top:10px"></div>
+          <p class="note" id="netHint" style="margin:8px 0 0"></p>
         </div>
-        <div class="joinlist" id="joinUrls" style="margin-top:10px"></div>
+        <p class="note masked-note" id="joinMaskedNote" style="display:none">Codes hidden from projector. Press Show to reveal.</p>
       </section>
-      <section class="panel">
-        <div class="kicker">Companion vault · off projector</div>
-        <p class="note">Remote address: <b class="mono" id="companionHint">/companion.html</b>. Code plus PIN required.</p>
-        <div class="pin" id="compPin">····</div>
-        <div class="btnrow" style="margin-top:10px"><button class="btn plain small" id="revealPin">Reveal PIN</button></div>
+      <section class="panel" id="compPanel">
+        <div class="kicker">Companion vault · off projector <button class="mini-toggle" id="toggleCompVis" title="Hide remote QR + PIN">Hide</button></div>
+        <div id="compSecrets">
+          <div class="qrrow">
+            <img id="compQr" alt="Companion remote QR code" style="width:110px;height:110px"/>
+            <div>
+              <div class="note">Scan for direct remote access (room pre-filled).</div>
+              <div class="joinlist" style="margin-top:8px"><span class="prime" id="companionLink">—</span></div>
+            </div>
+          </div>
+          <p class="note" style="margin:8px 0 0">Remote address: <b class="mono" id="companionHint">/companion.html</b>. Code plus PIN required.</p>
+          <div class="pin" id="compPin">····</div>
+          <div class="btnrow" style="margin-top:10px"><button class="btn plain small" id="revealPin">Reveal PIN</button></div>
+        </div>
+        <p class="note masked-note" id="compMaskedNote" style="display:none">Remote access hidden. Press Show to reveal.</p>
         <div class="seclog" id="secLog"></div>
       </section>
     </aside>
@@ -125,6 +139,7 @@
 
   <footer>BUZZ ARENA · timing host · all press times corrected per-device · <span id="footRoom"></span></footer>
 </div>
+<button id="exitPresent" title="Back to console (Esc)">Exit present · Esc</button>
 <div class="toast" id="toast"></div>
 <canvas id="fx"></canvas>
 <script src="/js/host.js"></script>

@@ -86,17 +86,26 @@ $('rejoinBtn').onclick = () => {
   const code = $('rejoinCode').value.trim().toUpperCase();
   if (!code) return toast('Enter the room code');
   socket.emit('host-rejoin', { code }, (res) => {
-    if (!res?.ok) return toast(res?.error || 'Room not found');
-    enterStudio(code, res); toast('Host session reclaimed');
+    if (!res?.ok) {
+      const msg = res?.error || 'Room not found';
+      // Server restarts wipe in-memory rooms (same on Vercel/Render redeploys).
+      // Offer to recreate the SAME code so printed QRs/codes keep working —
+      // teams simply rejoin.
+      if (/not found/i.test(msg)) {
+        toast(msg);
+        if (confirm(`Room ${code} not found on the server (it likely restarted).\n\nRecreate room ${code} now? Teams will need to rejoin.`)) {
+          socket.emit('create-room', { maxTeams: parseInt($('maxTeams').value, 10) || 16, wantedCode: code }, (r2) => {
+            if (!r2?.ok) return toast('Could not recreate room');
+            enterStudio(r2.code, r2); toast(`Room ${r2.code} recreated — teams rejoin`);
+          });
+        }
+      } else toast(msg);
+      return;
+    }
+    enterStudio(res.code || code, res); toast('Host session reclaimed');
   });
 };
-function enterStudio(code, res) {
-  roomCode = code;
-  $('setup').style.display = 'none'; $('studio').style.display = 'grid';
-  $('roomCode').textContent = code;
-  $('roomCodeStrip').textContent = code.split('').join(' ');
-  $('footRoom').textContent = 'room ' + code;
-  if (res?.companionPin) $('compPin').textContent = res.companionPin;
+function paintJoinSecrets(code, res) {
   if (res?.qr) $('qr').src = res.qr;
   if (res?.joinUrls?.length) {
     try {
@@ -104,8 +113,27 @@ function enterStudio(code, res) {
       $('joinLink').textContent = u.host + u.pathname + '?room=' + code;
     } catch { $('joinLink').textContent = res.joinUrls[0]; }
     $('joinUrls').innerHTML = res.joinUrls.slice(1, 4).map((u) => `<div>${escapeHtml(u)}</div>`).join('');
+    const first = res.joinUrls[0] || '';
+    const internet = /^https:\/\//.test(first) && !/localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(first);
+    $('netHint').textContent = internet
+      ? 'Internet link — works over mobile data, not just same Wi-Fi.'
+      : 'Same-Wi-Fi link (local IP). Deploy with PUBLIC_URL for internet play.';
   }
-  if (res?.companionUrl) $('companionHint').textContent = res.companionUrl.replace(/^https?:\/\//, '');
+  if (res?.companionUrl) {
+    $('companionHint').textContent = res.companionUrl.replace(/^https?:\/\//, '');
+    $('companionLink').textContent = res.companionUrl.replace(/^https?:\/\//, '');
+  }
+  if (res?.companionQr) { $('compQr').src = res.companionQr; $('compQr').style.display = 'block'; }
+  else { $('compQr').removeAttribute('src'); $('compQr').style.display = 'none'; }
+}
+function enterStudio(code, res) {
+  roomCode = code;
+  $('setup').style.display = 'none'; $('studio').style.display = 'grid';
+  $('roomCode').textContent = code;
+  $('roomCodeStrip').textContent = code.split('').join(' ');
+  $('footRoom').textContent = 'room ' + code;
+  if (res?.companionPin) $('compPin').textContent = res.companionPin;
+  paintJoinSecrets(code, res);
   try { localStorage.setItem('buzz-host-code', code); } catch {}
   if (res?.state) renderAll(res);
 }
@@ -116,11 +144,37 @@ $('fullBtn').onclick = () => {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => toast('Fullscreen blocked by browser'));
 };
-$('presentBtn').onclick = (e) => {
-  const on = document.body.classList.toggle('present');
-  e.currentTarget.textContent = on ? 'Console' : 'Present';
-  toast(on ? 'Present mode — rails hidden' : 'Console mode');
-};
+function setPresent(on) {
+  document.body.classList.toggle('present', !!on);
+  const b = $('presentBtn');
+  if (b) b.textContent = on ? 'Console' : 'Present';
+  toast(on ? 'Present mode — rails hidden (Esc to exit)' : 'Console mode');
+}
+$('presentBtn').onclick = () => setPresent(!document.body.classList.contains('present'));
+$('exitPresent').onclick = () => setPresent(false);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.body.classList.contains('present')) setPresent(false);
+});
+// Host can intentionally hide QR codes + links (projector privacy).
+// Both panels mask independently; state persists per session only.
+function bindHideToggle(btnId, secretsId, noteId, label) {
+  const btn = $(btnId);
+  if (!btn) return;
+  btn.onclick = () => {
+    const sec = $(secretsId), note = $(noteId);
+    const hidden = sec.style.display !== 'none';
+    sec.style.display = hidden ? 'none' : '';
+    if (note) note.style.display = hidden ? 'block' : 'none';
+    btn.textContent = hidden ? 'Show' : 'Hide';
+    if (hidden) toast(`${label} hidden from projector`);
+  };
+}
+bindHideToggle('toggleJoinVis', 'joinSecrets', 'joinMaskedNote', 'Team codes');
+bindHideToggle('toggleCompVis', 'compSecrets', 'compMaskedNote', 'Remote access');
+if (document.body.classList.contains('present')) {
+  const b = $('presentBtn');
+  if (b) b.textContent = 'Console';
+}
 
 function flashSpot() {
   const s = $('spot');
@@ -179,6 +233,13 @@ socket.on('control-event', (d) => {
   if (d?.action === 'arm' || d?.action === 'next') flashSpot();
 });
 socket.on('security-alert', (d) => { $('secLog').innerHTML += `<div>Security — ${escapeHtml(d.msg)} <span class="mono">${new Date().toLocaleTimeString()}</span></div>`; });
+socket.on('focus-alert', (d) => {
+  const msg = d?.away
+    ? `${d.teamName} left the buzzer tab/app`
+    : `${d.teamName} is back on the buzzer`;
+  $('secLog').innerHTML += `<div>Focus — ${escapeHtml(msg)} <span class="mono">${new Date().toLocaleTimeString()}</span></div>`;
+  toast(msg);
+});
 
 $('roster').addEventListener('click', (e) => {
   const b = e.target.closest('[data-kick]');
@@ -231,10 +292,12 @@ function renderRoster(teams, buzzes = []) {
     const bz = byId[t.id];
     let el = rosEls.get(t.id);
     if (!el) { el = document.createElement('div'); rosEls.set(t.id, el); box.appendChild(el); }
+    const status = !t.connected ? 'OUT' : (t.away ? 'AWAY' : 'IN');
     const html = `<span class="bar"></span><span class="nm">${escapeHtml(t.name)}</span>`
       + `${bz && bz.rank <= 3 ? `<span class="pos">P${bz.rank}</span>` : ''}`
       + `${bz && bz.rank > 3 ? `<span class="mg">+${bz.deltaMs}</span>` : ''}`
-      + `<span class="st ${t.connected ? 'in' : ''}">${t.connected ? 'IN' : 'OUT'} · ${t.rtt ?? '–'}</span>`
+      + `${t.away && t.connected ? '<span class="away">TAB</span>' : ''}`
+      + `<span class="st ${t.connected && !t.away ? 'in' : (t.away ? 'away' : '')}">${status} · ${t.rtt ?? '–'}</span>`
       + `<button class="rm" data-kick="${t.id}" title="Remove team">×</button>`;
     if (rosHtml.get(t.id) !== html) {
       rosHtml.set(t.id, html);

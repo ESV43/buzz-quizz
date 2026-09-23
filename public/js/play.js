@@ -17,7 +17,20 @@ try { $('roomInput').value ||= localStorage.getItem('buzz-room') || ''; $('nameI
 
 function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2400); }
 async function keepAwake() { try { await navigator.wakeLock?.request('screen'); } catch {} }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { keepAwake(); syncClock(); } });
+let lastAway = false;
+function reportFocus() {
+  const away = document.hidden;
+  if (away === lastAway) return;
+  lastAway = away;
+  if (team) socket.emit('focus-status', { away });
+  if (!away) toast('Back on buzzer');
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { keepAwake(); syncClock(); }
+  reportFocus();
+});
+window.addEventListener('blur', () => { if (team && !lastAway) { lastAway = true; socket.emit('focus-status', { away: true }); } });
+window.addEventListener('focus', () => { if (team && lastAway) { lastAway = false; socket.emit('focus-status', { away: false }); } });
 $('joinBtn').addEventListener('click', () => keepAwake(), { once: true });
 
 /* light background clock sync — never blocks join or press */
@@ -125,6 +138,14 @@ function readout(cls, pos, sub) {
   $('status').textContent = pos;
   $('rankLine').textContent = sub;
 }
+function triggerGlow() {
+  // visible click glow: same-frame feedback even before server confirms
+  btn.classList.remove('hit'); dial.classList.remove('hit');
+  void btn.offsetWidth;
+  btn.classList.add('hit'); dial.classList.add('hit');
+  clearTimeout(triggerGlow._h);
+  triggerGlow._h = setTimeout(() => { btn.classList.remove('hit'); dial.classList.remove('hit'); }, 750);
+}
 function pressBuzz(e) {
   if (e?.cancelable) e.preventDefault();
   if (!team || buzzLock || myBuzz) return;
@@ -140,6 +161,7 @@ function pressBuzz(e) {
   btn.textContent = '···';
   readout('st-placed', 'SENT', 'CONFIRMING WITH HOST');
   ripple();
+  triggerGlow();
   try { navigator.vibrate?.(25); } catch {}
   clickSound();
   socket.emit('buzz', { clientPressTime, offset: Math.round(clockOffset), rtt }, (res) => {
@@ -244,7 +266,7 @@ function paintState() {
 }
 function renderMine() {
   if (!myBuzz) return;
-  if (myBuzz.rank === 1) fanfare();
+  if (myBuzz.rank === 1) { fanfare(); triggerGlow(); }
   paintState();
   // placement reveal: ordinal + field size + animated margin count-up
   const r = myBuzz.rank, dest = myBuzz.deltaMs;

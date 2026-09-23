@@ -4,7 +4,11 @@ const $ = (id) => document.getElementById(id);
 async function keepAwake() { try { await navigator.wakeLock?.request('screen'); } catch {} }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
 function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2400); }
-try { $('code').value = (localStorage.getItem('buzz-room') || '').toUpperCase(); } catch {}
+try {
+  const q = new URLSearchParams(location.search).get('room');
+  $('code').value = (q || localStorage.getItem('buzz-room') || '').toUpperCase();
+  if (q) try { localStorage.setItem('buzz-room', q.toUpperCase()); } catch {}
+} catch {}
 $('unlock').onclick = () => {
   const code = $('code').value.trim().toUpperCase(), pin = $('pin').value.trim();
   if (!code || !pin) return $('err').textContent = 'Enter both the room code and the PIN.';

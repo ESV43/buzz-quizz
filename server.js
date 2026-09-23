@@ -79,6 +79,15 @@ function joinLinks(socket, code) {
   if (!urls.length) urls.push(`http://localhost:${PORT}/play.html?room=${code}`);
   return urls;
 }
+/** Direct-access companion links (room pre-filled) — LAN fallback included. */
+function companionLinks(socket, code) {
+  const urls = [];
+  const base = publicBase(socket);
+  if (base) urls.push(`${base}/companion.html?room=${code}`);
+  for (const ip of localIPs()) urls.push(`http://${ip}:${PORT}/companion.html?room=${code}`);
+  if (!urls.length) urls.push(`http://localhost:${PORT}/companion.html?room=${code}`);
+  return urls;
+}
 
 // roomCode -> room
 const rooms = new Map();
@@ -86,7 +95,7 @@ const rooms = new Map();
 function publicTeams(room) {
   return [...room.teams.values()].map((t) => ({
     id: t.id, name: t.name, color: t.color,
-    connected: t.connected, rtt: t.rtt ?? null, offset: t.offset ?? null,
+    connected: t.connected, away: !!t.away, rtt: t.rtt ?? null, offset: t.offset ?? null,
   }));
 }
 function publicState(room) {
@@ -116,7 +125,9 @@ io.on('connection', (socket) => {
 
   // ---- HOST: create room ----
   socket.on('create-room', async (opts, cb) => {
-    const code = makeRoomCode();
+    let code = makeRoomCode();
+    const wanted = String(opts?.wantedCode || '').toUpperCase().trim();
+    if (/^[A-Z0-9]{4,6}$/.test(wanted) && !rooms.has(wanted)) code = wanted;
     const companionPin = makePin(4);
     const room = {
       code, createdAt: Date.now(),
@@ -130,29 +141,39 @@ io.on('connection', (socket) => {
     socket.join(code);
     socket.data.role = 'host';
     socket.data.roomCode = code;
-    const base = publicBase(socket);
     const joinUrls = joinLinks(socket, code);
-    const companionUrl = base ? `${base}/companion.html` : null;
-    let qr = null;
+    const compUrls = companionLinks(socket, code);
+    const companionUrl = compUrls[0] || null;
+    let qr = null, companionQr = null;
     try { qr = await QRCode.toDataURL(joinUrls[0]); } catch { /* ignore */ }
+    try { if (companionUrl) companionQr = await QRCode.toDataURL(companionUrl); } catch { /* ignore */ }
     cb?.({
-      ok: true, code, companionPin, joinUrls, companionUrl, qr,
+      ok: true, code, companionPin, joinUrls, companionUrl, companionUrls: compUrls, qr, companionQr,
       state: publicState(room), teams: publicTeams(room),
     });
     broadcastRoom(room);
   });
 
   // ---- HOST: reclaim after refresh ----
-  socket.on('host-rejoin', ({ code }, cb) => {
-    const room = rooms.get(String(code || '').toUpperCase());
-    if (!room) return cb?.({ ok: false, error: 'Room not found' });
+  // Returns the same payload as create-room (QRs included) so a refresh
+  // restores the full console. If the server restarted, in-memory rooms are
+  // gone — the client offers to recreate the same code (see wantedCode).
+  socket.on('host-rejoin', async ({ code }, cb) => {
+    const room = rooms.get(String(code || '').toUpperCase().trim());
+    if (!room) return cb?.({ ok: false, error: 'Room not found on this server. It may have restarted — recreate the same code.' });
     room.hostId = socket.id;
     socket.join(room.code);
     socket.data.role = 'host';
     socket.data.roomCode = room.code;
+    const joinUrls = joinLinks(socket, room.code);
+    const compUrls = companionLinks(socket, room.code);
+    const companionUrl = compUrls[0] || null;
+    let qr = null, companionQr = null;
+    try { qr = await QRCode.toDataURL(joinUrls[0]); } catch { /* ignore */ }
+    try { if (companionUrl) companionQr = await QRCode.toDataURL(companionUrl); } catch { /* ignore */ }
     cb?.({
-      ok: true, companionPin: room.companionPin,
-      joinUrls: joinLinks(socket, room.code),
+      ok: true, code: room.code, companionPin: room.companionPin,
+      joinUrls, companionUrl, companionUrls: compUrls, qr, companionQr,
       state: publicState(room), teams: publicTeams(room),
     });
     broadcastRoom(room);
@@ -179,7 +200,7 @@ io.on('connection', (socket) => {
         id: teamId,
         name: (typeof teamName === 'string' && teamName.trim()) ? teamName.trim().slice(0, 24) : `Team ${room.teams.size + 1}`,
         color: TEAM_COLORS[room.teams.size % TEAM_COLORS.length],
-        socketId: socket.id, connected: true,
+        socketId: socket.id, connected: true, away: false,
         rtt: rtt ?? null, offset: offset ?? null, lastSeen: Date.now(),
       };
       room.teams.set(teamId, team);
@@ -203,6 +224,22 @@ io.on('connection', (socket) => {
     if (typeof offset === 'number') team.offset = Math.round(offset);
     if (typeof rtt === 'number') team.rtt = Math.round(rtt);
     socket.to(room.code).emit('netstats', { teamId: team.id, rtt: team.rtt, offset: team.offset });
+  });
+
+  // ---- PLAYER: tab / app visibility (anti-wandering) ----
+  socket.on('focus-status', ({ away }) => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room || socket.data.role !== 'player') return;
+    const team = room.teams.get(socket.data.teamId);
+    if (!team) return;
+    const isAway = !!away;
+    if (team.away === isAway) return;
+    team.away = isAway;
+    team.lastSeen = Date.now();
+    io.to(room.code).emit('focus-alert', {
+      teamId: team.id, teamName: team.name, away: isAway, at: Date.now(),
+    });
+    broadcastRoom(room);
   });
 
   socket.on('rename-team', ({ name }, cb) => {
