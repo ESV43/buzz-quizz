@@ -551,7 +551,7 @@ setInterval(() => {
   }
 }, 60_000);
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  BUZZ ARENA live on :${PORT}`);
   if (PUBLIC_URL) console.log(`  Public URL: ${PUBLIC_URL}`);
   for (const ip of localIPs()) console.log(`  LAN: http://${ip}:${PORT}`);
