@@ -60,13 +60,18 @@ $('unlock').onclick = () => {
 };
 function ctl(a) {
   if (!socket.connected) { toast('Link lost — reconnecting'); try { socket.connect(); } catch {} return; }
+  if (a === 'arm' || a === 'next') {
+    // Optimistic 3-2-1 — server ticks correct it. Arm runs countdown too.
+    const qGuess = (parseInt(($('st').textContent.match(/Q(\d+)/)?.[1] || '0'), 10) || 0) + 1;
+    showCompCountdown(3, qGuess);
+  }
   try {
     socket.timeout(8000).emit('host-control', { action: a }, (err, r) => {
       if (err) return toast('Slow link — watch the host screen to confirm');
       if (r && !r.ok) toast(r.error || 'Blocked');
       else {
         try { navigator.vibrate?.(30); } catch {}
-        if (a === 'next' && r?.state?.countdown?.active) showCompCountdown(3, r.state.questionNo);
+        if ((a === 'next' || a === 'arm') && r?.state?.countdown?.active) showCompCountdown(3, r.state.questionNo);
       }
     });
   } catch { toast('Send failed — retry'); }
@@ -74,6 +79,9 @@ function ctl(a) {
 $('arm').onclick = () => ctl('arm'); $('lock').onclick = () => ctl('lock');
 $('next').onclick = () => ctl('next');
 function showCompCountdown(count, q) {
+  const key = `${count}:${q}`;
+  if (showCompCountdown._key === key && compCountdown) return;
+  showCompCountdown._key = key;
   compCountdown = { count, questionNo: q };
   $('st').textContent = `Q${q || '–'} · READY ${count}`;
   $('winner').textContent = `${count}… buzzers opening`;
@@ -84,6 +92,7 @@ function showCompCountdown(count, q) {
 }
 function clearCompCountdownGate() {
   compCountdown = null;
+  showCompCountdown._key = null;
   if (compCountdownTimer) { clearTimeout(compCountdownTimer); compCountdownTimer = null; }
   for (const id of ['arm', 'next']) { const b = $(id); if (b) b.disabled = false; }
 }

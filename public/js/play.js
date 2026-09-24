@@ -40,6 +40,11 @@ function ensureCountdownOverlay() {
 }
 function showCountdown(count, q) {
   ensureCountdownOverlay();
+  // De-dupe: room-update + buzz-update + control-event can deliver the same
+  // tick 2-3x — re-popping + re-beeping each time is what looked jittery.
+  const key = `${count}:${q ?? ''}`;
+  if (showCountdown._key === key && $('countOverlay')?.classList.contains('show')) return;
+  showCountdown._key = key;
   const ov = $('countOverlay');
   ov.classList.add('show');
   const n = $('countNum');
@@ -53,6 +58,7 @@ function showCountdown(count, q) {
 function hideCountdown() {
   const ov = $('countOverlay');
   if (ov) ov.classList.remove('show');
+  showCountdown._key = null;
   if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
   countdown = null;
 }

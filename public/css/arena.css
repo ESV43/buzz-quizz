@@ -187,22 +187,30 @@ tr.pos1 td.pos{color:var(--gold); font-weight:600}
   box-shadow:0 22px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.07), inset 0 -14px 30px rgba(0,0,0,.5);
   transition:transform .07s ease, color .18s ease, box-shadow .25s ease, border-color .2s ease;
   touch-action:none; user-select:none; -webkit-user-select:none}
-#buzzBtn.armed{color:var(--ink); border-color:color-mix(in srgb, var(--team) 55%, #2c333c);
-  box-shadow:0 0 0 1px color-mix(in srgb, var(--team) 40%, transparent), 0 0 44px color-mix(in srgb, var(--team) 22%, transparent), 0 22px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.09)}
+#buzzBtn.armed{color:#fff; border-color:#ff7a7a;
+  background:radial-gradient(circle at 50% 28%, #ff7b7b 0%, #f04444 32%, #d21f26 58%, #8f0f15 100%);
+  box-shadow:0 0 0 2px rgba(255,90,90,.65), 0 0 60px rgba(229,72,77,.75), 0 0 130px rgba(229,72,77,.4), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.4), inset 0 -18px 34px rgba(0,0,0,.35);
+  animation:armedPulse 1.6s ease-in-out infinite}
+@keyframes armedPulse{0%,100%{box-shadow:0 0 0 2px rgba(255,90,90,.65), 0 0 60px rgba(229,72,77,.75), 0 0 130px rgba(229,72,77,.4), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.4), inset 0 -18px 34px rgba(0,0,0,.35)}
+  50%{box-shadow:0 0 0 3px rgba(255,120,120,.9), 0 0 90px rgba(229,72,77,.95), 0 0 170px rgba(229,72,77,.55), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.5), inset 0 -18px 34px rgba(0,0,0,.3)}}
+#buzzBtn.armed.pressed, #buzzBtn.armed:active{transform:scale(.95);
+  background:radial-gradient(circle at 50% 30%, #ff6b6b 0%, #e5484d 45%, #a31217 100%)}
 #buzzBtn:active{transform:scale(.965)}
 #buzzBtn.pressed{transform:scale(.95)}
 #buzzBtn.locked{cursor:not-allowed}
 #buzzBtn.sending{color:var(--muted)}
 #buzzBtn.shake{animation:shake .3s ease}
 @keyframes shake{0%,100%{transform:translateX(0)} 25%{transform:translateX(-7px)} 50%{transform:translateX(6px)} 75%{transform:translateX(-3px)}}
-#buzzBtn .ripple{position:absolute; left:50%; top:50%; width:120px; height:120px; border-radius:50%; pointer-events:none;
-  background:color-mix(in srgb, var(--team) 40%, white); opacity:.45; transform:translate(-50%,-50%) scale(0); animation:rip .45s ease-out forwards}
+#buzzBtn .ripple{position:absolute; left:50%; top:50%; width:140px; height:140px; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,120,120,.7) 45%, transparent 70%); opacity:.9; transform:translate(-50%,-50%) scale(0); animation:rip .5s ease-out forwards}
 @keyframes rip{to{transform:translate(-50%,-50%) scale(2.4); opacity:0}}
 .readout{border:1px solid var(--line-soft); border-radius:10px; background:var(--panel); padding:16px 18px; text-align:center; min-height:86px;
   display:flex; flex-direction:column; justify-content:center; gap:3px}
 .readout .r-pos{font-family:var(--fd); font-weight:800; font-size:24px; letter-spacing:.04em}
 .readout .r-sub{font-family:var(--fm); font-size:12px; color:var(--muted); letter-spacing:.08em}
+.readout.st-live{border-color:rgba(52,209,123,.55); box-shadow:0 0 24px rgba(52,209,123,.18)}
 .readout.st-live .r-pos{color:var(--go)}
+.readout.st-placed{border-color:rgba(217,164,65,.55); box-shadow:0 0 24px rgba(217,164,65,.16)}
 .readout.st-placed .r-pos{color:var(--gold)}
 .readout.st-idle .r-pos{color:var(--faint)}
 .order{margin-top:14px}
@@ -253,13 +261,14 @@ body.present #exitPresent{display:block}
 #awayList .awaytag{font-family:var(--fm); font-size:10px; letter-spacing:.14em; color:#fff;
   background:var(--stop); border-radius:5px; padding:2px 7px; margin-left:auto; white-space:nowrap}
 /* buzzer click glow */
-#buzzBtn.hit{animation:buzzGlow .7s ease-out}
-.dial.hit .dial-ticks{animation:tickspin 24s linear infinite, glowSpin .7s ease-out}
+#buzzBtn.hit{animation:buzzGlow .8s ease-out}
+.dial.hit .dial-ticks{animation:tickspin 24s linear infinite, glowSpin .8s ease-out}
 @keyframes buzzGlow{
-  0%{box-shadow:0 0 0 2px color-mix(in srgb, var(--team) 80%, white), 0 0 70px color-mix(in srgb, var(--team) 65%, transparent), 0 22px 60px rgba(0,0,0,.6)}
-  100%{box-shadow:0 22px 60px rgba(0,0,0,.6)}
+  0%{box-shadow:0 0 0 4px rgba(255,255,255,.95), 0 0 120px rgba(255,80,80,1), 0 0 220px rgba(229,72,77,.8), 0 22px 60px rgba(0,0,0,.6)}
+  100%{box-shadow:0 0 0 2px rgba(255,90,90,.65), 0 0 60px rgba(229,72,77,.75), 0 0 130px rgba(229,72,77,.4), 0 22px 60px rgba(0,0,0,.6)}
 }
-@keyframes glowSpin{0%{filter:brightness(1.8)}100%{filter:brightness(1)}}
+@keyframes glowSpin{0%{filter:brightness(2.2) saturate(1.4)}100%{filter:brightness(1) saturate(1)}}
+.dial.armed .dial-ticks{filter:drop-shadow(0 0 6px rgba(229,72,77,.8))}
 
 /* ---------- fx + toast ---------- */
 #fx{position:fixed; inset:0; pointer-events:none; z-index:60}
@@ -275,8 +284,9 @@ footer{border-top:1px solid var(--line-soft); margin-top:34px; padding-top:16px;
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
 .spot.flash{animation:spotFlash .8s ease}
 @keyframes spotFlash{0%{box-shadow:inset 0 0 0 2px var(--go)}100%{box-shadow:inset 0 0 0 0 transparent}}
-.spot.pop .s-name{animation:spotPop .55s cubic-bezier(.2,.9,.25,1.15)}
-@keyframes spotPop{from{transform:translateY(16px); opacity:0} to{transform:none; opacity:1}}
+.spot.pop .s-name{animation:spotPop .4s cubic-bezier(.2,.7,.2,1); will-change:transform,opacity}
+@keyframes spotPop{0%{transform:scale(.94) translateZ(0); opacity:.25}100%{transform:scale(1) translateZ(0); opacity:1}}
+.spot .s-name{font-variant-numeric:tabular-nums; will-change:transform,opacity}
 table.board tr.fresh td{animation:rowFresh 1.4s ease}
 @keyframes rowFresh{0%{background:rgba(217,164,65,.22)}100%{background:transparent}}
 .meter{height:6px; background:#181d23; border-radius:99px; overflow:hidden; margin-top:10px}
@@ -366,8 +376,10 @@ body.light .dial-ticks{background:repeating-conic-gradient(rgba(0,0,0,.20) 0deg 
 body.light #buzzBtn{background:radial-gradient(circle at 50% 30%, #ffffff 0%, #f2f2f6 58%, #e4e4ea 100%);
   border-color:#c7c7cc; color:var(--faint);
   box-shadow:0 20px 44px rgba(0,0,0,.12), inset 0 1px 0 #fff, inset 0 -14px 28px rgba(0,0,0,.06)}
-body.light #buzzBtn.armed{color:var(--ink); border-color:color-mix(in srgb, var(--team) 55%, #c7c7cc);
-  box-shadow:0 0 0 1px color-mix(in srgb, var(--team) 35%, transparent), 0 0 40px color-mix(in srgb, var(--team) 25%, transparent), 0 20px 44px rgba(0,0,0,.12), inset 0 1px 0 #fff}
+body.light #buzzBtn.armed{color:#fff; border-color:#e5484d;
+  background:radial-gradient(circle at 50% 28%, #ff7b7b 0%, #f04444 35%, #d21f26 65%, #a31217 100%);
+  box-shadow:0 0 0 2px rgba(229,72,77,.5), 0 0 55px rgba(229,72,77,.55), 0 0 120px rgba(229,72,77,.3), 0 20px 44px rgba(0,0,0,.18), inset 0 2px 0 rgba(255,255,255,.5), inset 0 -14px 28px rgba(0,0,0,.22);
+  animation:armedPulse 1.6s ease-in-out infinite}
 body.light #buzzBtn.sending{color:var(--muted)}
 body.light .readout.st-live .r-pos{color:var(--go)}
 body.light .readout.st-placed .r-pos{color:var(--gold)}
@@ -391,14 +403,65 @@ body.light #edgeFlash.go{animation:edgeGoLight 1s ease}
 #countOverlay{position:fixed; inset:0; z-index:65; display:none; place-items:center;
   align-content:center; text-align:center; pointer-events:none;
   background:rgba(6,8,10,.55); backdrop-filter:blur(2px)}
-#countOverlay.show{display:grid; animation:toastIn .2s ease}
+#countOverlay.show{display:grid}
 #countOverlay .count-num{font-family:var(--fd); font-weight:800; font-size:clamp(110px,34vw,210px);
-  line-height:1; letter-spacing:-.02em; color:var(--gold); text-shadow:0 10px 60px rgba(0,0,0,.5)}
-#countOverlay .count-num.pop{animation:countPop .5s cubic-bezier(.2,.9,.25,1.15)}
-@keyframes countPop{from{transform:scale(.6); opacity:0} to{transform:scale(1); opacity:1}}
-#countOverlay .count-sub{font-family:var(--fm); font-size:12px; letter-spacing:.26em; color:var(--ink); margin-top:10px}
+  line-height:1; letter-spacing:-.02em; color:var(--gold); text-shadow:0 10px 60px rgba(0,0,0,.5);
+  font-variant-numeric:tabular-nums; will-change:transform,opacity;
+  transform:translateZ(0); backface-visibility:hidden; -webkit-font-smoothing:antialiased}
+#countOverlay .count-num.pop{animation:countPop .45s cubic-bezier(.2,.7,.2,1)}
+@keyframes countPop{0%{transform:scale(.72) translateZ(0); opacity:0}55%{opacity:1}100%{transform:scale(1) translateZ(0); opacity:1}}
+#countOverlay .count-sub{font-family:var(--fm); font-size:12px; letter-spacing:.26em; color:var(--ink); margin-top:10px;
+  font-variant-numeric:tabular-nums}
 body.light #countOverlay{background:rgba(245,245,247,.6)}
 body.light #countOverlay .count-num{color:var(--gold); text-shadow:0 8px 30px rgba(0,0,0,.12)}
 /* disabled deck buttons during countdown */
 .btn:disabled{opacity:.45}
 #spot .s-name.counting{color:var(--gold)}
+
+/* ---------- tablet layout (601–1024px + landscape) ---------- */
+/* Player terminal: wider column, bigger dial, roomier touch targets. */
+@media(min-width:601px) and (max-width:1024px){
+  body .wrap{max-width:780px}
+  .stage{padding:30px 0 26px}
+  .dial{width:min(58vw,420px); height:min(58vw,420px)}
+  #buzzBtn{font-size:clamp(28px,4.5vw,40px)}
+  .ident h1{font-size:clamp(30px,4.6vw,44px)}
+  .phead .cell{padding:14px 20px}
+  .phead .v{font-size:20px !important}
+  .readout{min-height:100px; padding:20px}
+  .readout .r-pos{font-size:28px}
+  .readout .r-sub{font-size:13px}
+  .orow{font-size:15.5px; padding:12px 4px}
+  .btn{min-height:54px; font-size:13px}
+  #countOverlay .count-num{font-size:clamp(140px,26vw,260px)}
+}
+/* Tablet landscape: dial left, status/order right — no long scroll. */
+@media(min-width:700px) and (max-width:1180px) and (orientation:landscape){
+  body .wrap{max-width:960px}
+  #playView .stagelayout{display:grid; grid-template-columns:minmax(320px,460px) 1fr; gap:26px; align-items:center}
+  #playView .stagelayout .side{min-width:0}
+  .stage{padding:18px 0}
+  .dial{width:min(38vw,400px); height:min(38vw,400px)}
+}
+/* Host console on tablets: keep 2-col longer, bigger deck + roster. */
+@media(min-width:700px) and (max-width:1100px){
+  .studio{grid-template-columns:320px 1fr}
+  .stateword{font-size:34px}
+  .spot .s-name{font-size:clamp(30px,4vw,46px)}
+  .roster{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+  table.board{font-size:15px}
+  table.board td{padding:13px 12px}
+}
+/* Coarse pointers (tablets/phones): larger hit areas, no hover traps. */
+@media(pointer:coarse){
+  .btn{min-height:52px}
+  .ident button{padding:12px 16px}
+  .rrow .rm{font-size:22px; padding:4px 10px}
+  .mini-toggle{padding:8px 14px}
+  #buzzBtn{cursor:pointer}
+}
+/* Reduce motion: kill pulse/breathe loops, keep state changes instant. */
+@media(prefers-reduced-motion:reduce){
+  .dial.armed, #buzzBtn.armed{animation:none}
+  #buzzBtn.hit, .spot.pop .s-name, #countOverlay .count-num.pop{animation-duration:.01ms}
+}

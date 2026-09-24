@@ -227,6 +227,11 @@ function flashSpot() {
 /* 3-2-1 countdown rendering on the spotlight + control deck gating */
 let hostCountdown = null, hostCountdownTimer = null;
 function renderHostCountdown(count, q) {
+  // De-dupe: buzz-update + room-update + control-event can all deliver the
+  // same tick — re-popping + re-ticking each time is what looked jittery.
+  const key = `${count}:${q}`;
+  if (renderHostCountdown._key === key && hostCountdown) return;
+  renderHostCountdown._key = key;
   hostCountdown = { count, questionNo: q };
   setQ(q);
   paintState(false, q);
@@ -248,6 +253,7 @@ function renderHostCountdown(count, q) {
 }
 function clearHostCountdownGate() {
   hostCountdown = null;
+  renderHostCountdown._key = null;
   if (hostCountdownTimer) { clearTimeout(hostCountdownTimer); hostCountdownTimer = null; }
   for (const id of ['armBtn', 'nextBtn']) { const b = $(id); if (b) b.disabled = false; }
 }
@@ -265,13 +271,13 @@ function buzzSoundTick() {
 function control(action, extra = {}, retried = false) {
   if (!roomCode) return;
   if (!socket.connected) { toast('Link lost — reconnecting, try again'); try { socket.connect(); } catch {} return; }
-  if (action === 'next') {
+  if (action === 'next' || action === 'arm') {
     // Optimistic countdown — server ticks (3,2,1) correct it; live comes last.
+    // Arm runs the same 3-2-1 as Next (no more instant arm).
     const qGuess = (parseInt(($('qNum').textContent || '0'), 10) || 0) + 1;
     renderHostCountdown(3, qGuess);
     flashSpot();
-  } else if (action === 'arm') { paintState(true, null); flashSpot(); }
-  else if (action === 'lock' || action === 'reset') { clearHostCountdownGate(); paintState(false, null); }
+  } else if (action === 'lock' || action === 'reset') { clearHostCountdownGate(); paintState(false, null); }
   try {
     socket.timeout(8000).emit('host-control', { action, ...extra }, (err, r) => {
       if (err) {

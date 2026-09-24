@@ -411,7 +411,8 @@ io.on('connection', (socket) => {
 
   function doControl(action, room, extra = {}) {
     if (action === 'arm') {
-      // Instant arm (same question re-open). Cancels any running countdown.
+      // Legacy instant-arm fallback (host-control now routes arm -> countdown).
+      // Kept so any direct doControl('arm') call still opens the buzzer.
       clearCountdown(room);
       if (extra.increment !== false) room.state.questionNo += 1;
       if (room.state.questionNo < 1) room.state.questionNo = 1;
@@ -448,8 +449,9 @@ io.on('connection', (socket) => {
     if (socket.data.role === 'companion' && !['arm', 'lock', 'reset', 'next', 'clear', 'present'].includes(action)) {
       return cb?.({ ok: false, error: 'Companions can only arm / lock / reset / present.' });
     }
-    if (action === 'next') {
+    if (action === 'next' || action === 'arm') {
       // Server-driven 3-2-1: bump Q, hold locked, tick, then auto-arm.
+      // Both Arm and Next run the countdown (Arm is no longer instant).
       startCountdown(room, 3);
       cb?.({ ok: true, state: publicState(room) });
       return;
