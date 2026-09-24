@@ -1,15 +1,24 @@
-/* Team terminal. Protocol unchanged. */
+/* Team terminal — hardened connect + retryable buzz + 3-2-1 countdown. */
 const socket = io({
-  transports: ['websocket', 'polling'],
+  // polling-first connects instantly behind mobile middleboxes / captive
+  // portals; websocket-first was hanging ~9s before fallback ("huge buffering").
+  transports: ['polling', 'websocket'],
+  upgrade: true,
+  rememberUpgrade: true,
   reconnection: true,
-  reconnectionDelay: 400,
-  reconnectionDelayMax: 3500,
-  timeout: 9000,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 500,
+  reconnectionDelayMax: 5000,
+  randomizationFactor: 0.5,
+  timeout: 15000,
 });
 const $ = (id) => document.getElementById(id);
 let team = null, roomCode = null, clockOffset = 0, rtt = 0;
 let armed = false, questionNo = 0, myBuzz = null, buzzLock = false;
 let audioCtx = null, syncing = false, lastCount = 0, mineToken = 0, editingName = false;
+let pendingBuzz = null; // { buzzId, clientPressTime, tries } — retried, never stuck
+let countdown = null;   // { questionNo, endsAt } while 3-2-1 runs
+let countdownTimer = null;
 
 const params = new URLSearchParams(location.search);
 if (params.get('room')) $('roomInput').value = params.get('room').toUpperCase();
@@ -17,33 +26,94 @@ try { $('roomInput').value ||= localStorage.getItem('buzz-room') || ''; $('nameI
 
 function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2400); }
 async function keepAwake() { try { await navigator.wakeLock?.request('screen'); } catch {} }
+function makeBuzzId() {
+  try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch {}
+  return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+/* countdown overlay (created if the HTML template predates it) */
+function ensureCountdownOverlay() {
+  if ($('countOverlay')) return;
+  const d = document.createElement('div');
+  d.id = 'countOverlay';
+  d.innerHTML = '<div class="count-num" id="countNum">3</div><div class="count-sub" id="countSub">GET READY</div>';
+  document.body.appendChild(d);
+}
+function showCountdown(count, q) {
+  ensureCountdownOverlay();
+  const ov = $('countOverlay');
+  ov.classList.add('show');
+  const n = $('countNum');
+  if (n) n.textContent = String(count);
+  const sub = $('countSub');
+  if (sub) sub.textContent = q ? `QUESTION ${q} — BUZZERS OPEN IN` : 'GET READY';
+  // pop animation each tick
+  if (n) { n.classList.remove('pop'); void n.offsetWidth; n.classList.add('pop'); }
+  clickSound();
+}
+function hideCountdown() {
+  const ov = $('countOverlay');
+  if (ov) ov.classList.remove('show');
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  countdown = null;
+}
+function syncCountdownFromState(state) {
+  const cd = state?.countdown;
+  if (cd?.active) {
+    // New question counting down: any queued press from the old question is stale.
+    pendingBuzz = null; myBuzz = null;
+    countdown = { questionNo: cd.questionNo, endsAt: cd.endsAt };
+    // Derive current tick from server clock so a rejoin mid-countdown lands right.
+    const remainMs = Math.max(0, (cd.endsAt || Date.now()) - Date.now());
+    const count = Math.max(1, Math.ceil(remainMs / 1000));
+    armed = false;
+    showCountdown(Math.min(3, count), cd.questionNo);
+    paintState();
+    if (!countdownTimer) {
+      countdownTimer = setInterval(() => {
+        if (!countdown) { clearInterval(countdownTimer); countdownTimer = null; return; }
+        const r = Math.max(0, countdown.endsAt - Date.now());
+        if (r <= 0) { hideCountdown(); return; }
+        const c = Math.max(1, Math.ceil(r / 1000));
+        const n = $('countNum');
+        if (n && n.textContent !== String(Math.min(3, c))) showCountdown(Math.min(3, c), countdown.questionNo);
+      }, 250);
+    }
+  } else if (countdown) {
+    hideCountdown();
+  }
+}
 let lastAway = false;
 function reportFocus() {
   const away = document.hidden;
   if (away === lastAway) return;
   lastAway = away;
-  if (team) socket.emit('focus-status', { away });
+  if (team && socket.connected) socket.emit('focus-status', { away });
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     keepAwake(); syncClock();
+    if (!socket.connected) socket.connect();
     // returning from another app: socket may be stale even if `connected`
     // looks alive — throttled silent rejoin restores live arm/buzz state.
     if (team && roomCode && socket.connected) rejoin(true);
   }
   reportFocus();
 });
-window.addEventListener('blur', () => { if (team && !lastAway) { lastAway = true; socket.emit('focus-status', { away: true }); } });
-window.addEventListener('focus', () => { if (team && lastAway) { lastAway = false; socket.emit('focus-status', { away: false }); } });
+window.addEventListener('blur', () => { if (team && !lastAway) { lastAway = true; if (socket.connected) socket.emit('focus-status', { away: true }); } });
+window.addEventListener('focus', () => { if (team && lastAway) { lastAway = false; if (socket.connected) socket.emit('focus-status', { away: false }); } });
+window.addEventListener('online', () => { try { socket.connect(); } catch {} if (team && roomCode) setTimeout(() => rejoin(true), 600); });
+window.addEventListener('offline', () => { $('connBar').classList.add('show'); $('connBar').textContent = 'OFFLINE — CHECK WIFI / DATA, RETRYING'; });
 $('joinBtn').addEventListener('click', () => keepAwake(), { once: true });
 
 /* light background clock sync — never blocks join or press */
-const SYNC_N = 5;
+const SYNC_N = 3;
 async function syncSample() {
   const t0 = Date.now();
   const res = await new Promise((resolve) => {
-    const to = setTimeout(() => resolve(null), 1200);
-    socket.emit('time-sync', { t0 }, (r) => { clearTimeout(to); resolve(r); });
+    const to = setTimeout(() => resolve(null), 900);
+    try {
+      socket.timeout(900).emit('time-sync', { t0 }, (err, r) => { clearTimeout(to); resolve(err ? null : r); });
+    } catch { clearTimeout(to); resolve(null); }
   });
   if (!res) return null;
   const t3 = Date.now();
@@ -62,17 +132,25 @@ async function syncClock() {
     clockOffset = med(best.map((s) => s.off));
     rtt = Math.round(med(best.map((s) => s.rtt)));
     $('netPill').textContent = `±${Math.round(rtt / 2)}`;
-    if (team) socket.emit('update-netstats', { offset: Math.round(clockOffset), rtt });
+    if (team && socket.connected) socket.emit('update-netstats', { offset: Math.round(clockOffset), rtt });
   } finally { syncing = false; }
 }
-socket.on('connect', () => { syncClock(); });
-socket.on('disconnect', () => { $('connBar').classList.add('show'); toast('Connection lost — reconnecting'); });
 socket.on('connect', () => {
-  if ($('connBar').classList.contains('show')) { $('connBar').classList.remove('show'); toast('Reconnected'); }
+  syncClock();
+  if ($('connBar').classList.contains('show') && navigator.onLine !== false) {
+    $('connBar').classList.remove('show');
+    $('connBar').textContent = 'CONNECTION LOST — RECONNECTING';
+    toast('Reconnected');
+  }
   // socket may have died while the tab was backgrounded — reclaim the same
   // team (no duplicate) and pull fresh state so arm/buzzes are current.
-  if (team && roomCode) rejoin(true);
+  if (team && roomCode) {
+    rejoin(true);
+    // A press whose ack was lost in the flap: resend same id + press time.
+    if (pendingBuzz && !myBuzz) setTimeout(() => retryPendingBuzz('reconnect'), 800);
+  }
 });
+socket.on('disconnect', () => { $('connBar').classList.add('show'); toast('Connection lost — reconnecting'); });
 (function scheduleSync() {
   setTimeout(() => { if (team) syncClock(); scheduleSync(); }, 20000 + Math.random() * 8000);
 })();
@@ -91,7 +169,7 @@ function rejoin(silent) {
   }, (res) => {
     if (!res?.ok) {
       // room gone or team kicked while away — drop back to check-in
-      team = null; myBuzz = null;
+      team = null; myBuzz = null; pendingBuzz = null;
       try { localStorage.removeItem('buzz-team-id'); } catch {}
       $('playView').style.display = 'none'; $('joinView').style.display = 'block';
       $('joinErr').textContent = res?.error || 'Session lost — join again.';
@@ -103,8 +181,10 @@ function rejoin(silent) {
     if (res.state) {
       // restore own placement even mid-question (onRoomUpdate only does this on Q change)
       myBuzz = (res.state.buzzes || []).find((b) => b.teamId === team.id) || null;
+      if (myBuzz) pendingBuzz = null;
       onRoomUpdate({ teams: [], state: res.state });
       if (myBuzz) renderMine();
+      else if (pendingBuzz) retryPendingBuzz('rejoin-state');
     }
     if (!silent) toast(`Checked in as ${team.name}`);
   });
@@ -113,22 +193,32 @@ $('joinBtn').onclick = () => {
   roomCode = $('roomInput').value.trim().toUpperCase();
   const teamName = $('nameInput').value.trim() || 'Team';
   if (roomCode.length < 4) return $('joinErr').textContent = 'Enter the 5-letter code from the host display.';
+  if (!socket.connected) { try { socket.connect(); } catch {} }
   $('joinBtn').disabled = true;
-  socket.emit('join-as-player', { code: roomCode, teamName, teamId: storedTeamId(), offset: Math.round(clockOffset), rtt }, (res) => {
-    $('joinBtn').disabled = false;
-    if (!res?.ok) { $('joinErr').textContent = res?.error || 'Join failed'; return; }
-    team = res.team; lastAway = false;
-    try { localStorage.setItem('buzz-room', roomCode); localStorage.setItem('buzz-name', team.name); localStorage.setItem('buzz-team-id', team.id); } catch {}
-    $('joinView').style.display = 'none'; $('playView').style.display = 'block';
-    $('roomTag').textContent = roomCode.split('').join(' ');
-    applyTeam(); syncClock(); keepAwake();
-    if (res.state) {
-      myBuzz = (res.state.buzzes || []).find((b) => b.teamId === team.id) || null;
-      onRoomUpdate({ teams: [], state: res.state });
-      if (myBuzz) renderMine();
-    }
-    toast(`Checked in as ${team.name}`);
-  });
+  const attempt = (retried = false) => {
+    socket.timeout(8000).emit('join-as-player', { code: roomCode, teamName, teamId: storedTeamId(), offset: Math.round(clockOffset), rtt }, (err, res) => {
+      if (err && !retried) {
+        // join emit timed out (flaky link) — one retry before surfacing
+        toast('Slow link — retrying join');
+        return attempt(true);
+      }
+      $('joinBtn').disabled = false;
+      if (err || !res?.ok) { $('joinErr').textContent = res?.error || 'Join failed — check code and connection, then retry.'; return; }
+      team = res.team; lastAway = false;
+      pendingBuzz = null; myBuzz = null; hideCountdown();
+      try { localStorage.setItem('buzz-room', roomCode); localStorage.setItem('buzz-name', team.name); localStorage.setItem('buzz-team-id', team.id); } catch {}
+      $('joinView').style.display = 'none'; $('playView').style.display = 'block';
+      $('roomTag').textContent = roomCode.split('').join(' ');
+      applyTeam(); syncClock(); keepAwake();
+      if (res.state) {
+        myBuzz = (res.state.buzzes || []).find((b) => b.teamId === team.id) || null;
+        onRoomUpdate({ teams: [], state: res.state });
+        if (myBuzz) renderMine();
+      }
+      toast(`Checked in as ${team.name}`);
+    });
+  };
+  attempt(false);
 };
 
 function applyTeam() {
@@ -172,7 +262,7 @@ $('renameBtn').onclick = () => {
   inp.addEventListener('blur', () => done(true));
 };
 
-/* dial — optimistic press, same-frame feedback */
+/* dial — optimistic press, same-frame feedback, retryable ack */
 const btn = $('buzzBtn'), dial = $('dial');
 function readout(cls, pos, sub) {
   const r = $('readout');
@@ -188,32 +278,113 @@ function triggerGlow() {
   clearTimeout(triggerGlow._h);
   triggerGlow._h = setTimeout(() => { btn.classList.remove('hit'); dial.classList.remove('hit'); }, 750);
 }
+function setSending(sub) {
+  btn.classList.add('pressed', 'sending');
+  btn.textContent = '···';
+  readout('st-placed', 'SENT', sub || 'CONFIRMING WITH HOST');
+}
+function clearSending() {
+  btn.classList.remove('sending', 'pressed');
+  buzzLock = false;
+  paintState();
+}
+function sendBuzzAttempt(payload, done) {
+  // Timeout-based emit: a lost ack resolves (retry) instead of hanging the dial.
+  try {
+    socket.timeout(5000).emit('buzz', payload, (err, res) => done(err, res));
+  } catch (e) {
+    done(e || new Error('emit failed'), null);
+  }
+}
+function resolveBuzzAck(err, res) {
+  if (!pendingBuzz) return;
+  if (!err && res?.ok) {
+    pendingBuzz = null;
+    myBuzz = { rank: res.rank, deltaMs: res.deltaMs };
+    clearSending();
+    renderMine();
+    return;
+  }
+  const msg = res?.error || (err ? 'Slow link' : 'Send failed');
+  // Non-retryable states resolve immediately — never leave the dial spinning.
+  if (!err && res && (res.error === 'Get ready' || res.error === 'Already buzzed for this question')) {
+    pendingBuzz = null;
+    clearSending();
+    if (res.error === 'Get ready') toast('Hold — countdown running');
+    else paintState();
+    return;
+  }
+  if (!err && res && res.error === 'Buzzer is locked') {
+    pendingBuzz = null;
+    clearSending();
+    if (res.error) toast(res.error);
+    return;
+  }
+  // Retryable (timeout / flap / offline): keep one pending press, show state.
+  if (!socket.connected || err) {
+    readout('st-placed', 'QUEUED', 'LINK LOST — WILL RETRY');
+    toast('Link lost — press queued, retrying');
+    return;
+  }
+  // Server error we don't understand: release the dial so the user can press again.
+  pendingBuzz = null;
+  clearSending();
+  if (msg) toast(msg);
+}
+function retryPendingBuzz(why) {
+  if (!pendingBuzz || myBuzz || !team || !socket.connected) return;
+  if (countdown || !armed) return; // countdown/lock wins — drop stale queue
+  pendingBuzz.tries = (pendingBuzz.tries || 0) + 1;
+  if (pendingBuzz.tries > 4) {
+    pendingBuzz = null;
+    clearSending();
+    toast('Could not reach host — press again');
+    return;
+  }
+  setSending(`RETRY ${pendingBuzz.tries} — CONFIRMING`);
+  sendBuzzAttempt({
+    clientPressTime: pendingBuzz.clientPressTime,
+    offset: Math.round(clockOffset), rtt, buzzId: pendingBuzz.buzzId,
+  }, resolveBuzzAck);
+}
 function pressBuzz(e) {
   if (e?.cancelable) e.preventDefault();
   if (!team || buzzLock || myBuzz) return;
+  if (countdown) {
+    btn.classList.remove('shake'); void btn.offsetWidth; btn.classList.add('shake');
+    readout('st-idle', 'READY', 'COUNTDOWN — HOLD');
+    try { navigator.vibrate?.(15); } catch {}
+    return;
+  }
   if (!armed) {
     btn.classList.remove('shake'); void btn.offsetWidth; btn.classList.add('shake');
     readout('st-idle', 'LOCKED', questionNo ? `Q${questionNo} CLOSED — WAIT FOR HOST` : 'WAITING FOR HOST');
     try { navigator.vibrate?.(15); } catch {}
     return;
   }
+  if (!socket.connected) {
+    toast('Reconnecting — press will queue on link restore');
+    try { socket.connect(); } catch {}
+  }
   buzzLock = true;
   const clientPressTime = Date.now();
-  btn.classList.add('pressed', 'sending');
-  btn.textContent = '···';
-  readout('st-placed', 'SENT', 'CONFIRMING WITH HOST');
+  const buzzId = makeBuzzId();
+  pendingBuzz = { buzzId, clientPressTime, tries: 0 };
+  setSending();
   ripple();
   triggerGlow();
   try { navigator.vibrate?.(25); } catch {}
   clickSound();
-  socket.emit('buzz', { clientPressTime, offset: Math.round(clockOffset), rtt }, (res) => {
-    btn.classList.remove('sending');
-    setTimeout(() => { buzzLock = false; btn.classList.remove('pressed'); }, 250);
-    if (!res?.ok) { paintState(); if (res?.error) toast(res.error); return; }
-    myBuzz = { rank: res.rank, deltaMs: res.deltaMs };
-    renderMine();
-  });
-  setTimeout(() => { buzzLock = false; btn.classList.remove('pressed', 'sending'); }, 2500);
+  sendBuzzAttempt({ clientPressTime, offset: Math.round(clockOffset), rtt, buzzId }, resolveBuzzAck);
+  // Safety: never leave the dial spinning if the ack path goes silent.
+  setTimeout(() => {
+    if (pendingBuzz && !myBuzz && btn.classList.contains('sending')) {
+      if (!socket.connected) { readout('st-placed', 'QUEUED', 'LINK LOST — WILL RETRY'); buzzLock = false; }
+      else retryPendingBuzz('ack-timeout');
+    } else if (!pendingBuzz) {
+      buzzLock = false;
+    }
+  }, 5500);
 }
 function edgeGo() {
   const f = $('edgeFlash'); if (!f) return;
@@ -259,51 +430,91 @@ function fanfare() {
 socket.on('room-update', onRoomUpdate);
 socket.on('buzz-update', (d) => {
   questionNo = d.questionNo ?? questionNo;
-  armed = !!d.armed;
+  const wasCountdown = !!countdown;
+  syncCountdownFromState(d);
+  armed = countdown ? false : !!d.armed;
   lastCount = (d.buzzes || []).length;
   const mine = (d.buzzes || []).find((b) => b.teamId === team?.id);
   const prevRank = myBuzz?.rank;
-  myBuzz = mine ? { rank: mine.rank, deltaMs: mine.deltaMs } : myBuzz;
+  if (mine) {
+    myBuzz = { rank: mine.rank, deltaMs: mine.deltaMs };
+    pendingBuzz = null;
+    if (!wasCountdown || !countdown) clearSendingSilent();
+  } else if (!countdown && d.questionNo !== questionNo) {
+    // handled in onRoomUpdate path
+  }
   paintState();
   renderMini(d.buzzes || []);
   if (mine && mine.rank !== prevRank) renderMine();
 });
+function clearSendingSilent() { btn.classList.remove('sending', 'pressed'); buzzLock = false; }
 socket.on('control-event', (d) => {
-  if (d?.questionNo) { questionNo = d.questionNo; myBuzz = null; paintState(); }
-  if (d?.action === 'arm') { myBuzz = null; paintState(); edgeGo(); toast('Buzzers live'); fanfare(); }
-  if (d?.action === 'lock') toast('Locked by host');
-  if (d?.action === 'reset') { myBuzz = null; paintState(); }
+  if (d?.questionNo) {
+    if (d.questionNo !== questionNo) { questionNo = d.questionNo; myBuzz = null; pendingBuzz = null; }
+    else if (d.action === 'arm' || d.action === 'countdown') { /* same-Q re-arm keeps it simple: clear */ }
+  }
+  if (d?.action === 'countdown') {
+    const c = Math.max(1, Math.min(3, d.count || 3));
+    myBuzz = null; pendingBuzz = null;
+    armed = false;
+    countdown = { questionNo: d.questionNo || questionNo, endsAt: d.endsAt || (Date.now() + c * 1000) };
+    if (d.questionNo) questionNo = d.questionNo;
+    showCountdown(c, questionNo);
+    paintState();
+    return;
+  }
+  if (d?.action === 'arm') {
+    hideCountdown();
+    myBuzz = null; pendingBuzz = null;
+    paintState(); edgeGo(); toast(d?.via === 'countdown' ? 'Buzzers live' : 'Buzzers live'); fanfare();
+  }
+  if (d?.action === 'lock') { hideCountdown(); pendingBuzz = null; toast('Locked by host'); paintState(); }
+  if (d?.action === 'reset') { hideCountdown(); myBuzz = null; pendingBuzz = null; paintState(); }
 });
 socket.on('kicked', (d) => { if (d.teamId === team?.id) { toast('Removed by host'); setTimeout(() => location.reload(), 1200); } });
 
 function onRoomUpdate({ state }) {
   if (!state) return;
   const wasArmed = armed;
-  armed = !!state.armed; questionNo = state.questionNo || questionNo;
+  syncCountdownFromState(state);
+  armed = countdown ? false : !!state.armed;
+  questionNo = state.questionNo || questionNo;
   if (state.questionNo && $('qPill').dataset.q != String(state.questionNo)) {
     $('qPill').dataset.q = String(state.questionNo);
     myBuzz = (state.buzzes || []).find((b) => b.teamId === team?.id) || null;
+    if (myBuzz) pendingBuzz = null;
   }
   lastCount = (state.buzzes || []).length;
-  if (state.armed && !wasArmed) { myBuzz = null; edgeGo(); }
+  if (state.armed && !wasArmed && !countdown) { myBuzz = myBuzz; edgeGo(); }
   paintState();
   renderMini(state.buzzes || []);
   if (myBuzz) renderMine();
 }
 function paintState() {
   $('qPill').textContent = questionNo ? 'Q' + questionNo : '–';
+  if (countdown) {
+    $('stateTag').textContent = 'Ready';
+    $('stateTag').style.color = 'var(--gold)';
+    dial.classList.remove('armed');
+    btn.classList.remove('sending');
+    if (!pendingBuzz) {
+      btn.textContent = 'READY'; btn.className = 'locked';
+      readout('st-idle', 'READY', `Q${questionNo} STARTS — HOLD`);
+    }
+    return;
+  }
   $('stateTag').textContent = armed ? 'Live' : 'Locked';
   $('stateTag').style.color = armed ? 'var(--go)' : '';
   dial.classList.toggle('armed', armed && !myBuzz);
-  btn.classList.remove('sending');
+  if (!pendingBuzz) btn.classList.remove('sending');
   if (!armed) {
     btn.textContent = 'WAIT'; btn.className = 'locked';
     readout('st-idle', 'LOCKED', questionNo ? `Q${questionNo} CLOSED — WAIT FOR HOST` : 'WAITING FOR HOST');
   } else if (myBuzz) {
     btn.textContent = 'P' + myBuzz.rank; btn.className = 'armed';
   } else {
-    btn.textContent = 'BUZZ'; btn.className = 'armed';
-    readout('st-live', 'LIVE', 'BOTH PLAYERS MAY PRESS');
+    btn.textContent = pendingBuzz ? '···' : 'BUZZ'; btn.className = 'armed';
+    if (!pendingBuzz) readout('st-live', 'LIVE', 'BOTH PLAYERS MAY PRESS');
   }
 }
 function renderMine() {
@@ -340,3 +551,4 @@ function renderMini(buzzes) {
   if (box._last !== html) { box._last = html; box.innerHTML = html; }
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+ensureCountdownOverlay();

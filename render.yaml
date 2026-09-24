@@ -1,0 +1,13 @@
+# One-click deploy of the timing server on Render's FREE tier (no card required).
+# Dashboard → New → Blueprint → point at this repo. The live URL becomes the
+# room URL: open <url>/host.html on the projector laptop, QR codes resolve
+# automatically. Free services sleep after 15 min idle (~1 min cold start),
+# so open the host page ~10 min before the event to wake it.
+services:
+  - type: web
+    name: buzz-arena
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health

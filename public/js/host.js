@@ -1,5 +1,15 @@
-/* Host console — broadcast layout render layer. Protocol unchanged. */
-const socket = io({ transports: ['websocket', 'polling'], reconnectionDelay: 400, reconnectionDelayMax: 3500 });
+/* Host console — broadcast layout render layer. Hardened link + 3-2-1 countdown. */
+const socket = io({
+  transports: ['polling', 'websocket'],
+  upgrade: true,
+  rememberUpgrade: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 500,
+  reconnectionDelayMax: 5000,
+  randomizationFactor: 0.5,
+  timeout: 15000,
+});
 const $ = (id) => document.getElementById(id);
 let roomCode = null, soundOn = true, voiceOn = true, lastWinnerId = null;
 let actx = null;
@@ -66,13 +76,23 @@ function fxTick() {
 async function probe() {
   if (!socket.connected) return;
   const t0 = performance.now();
-  socket.emit('time-sync', { t0: Date.now() }, () => {
-    $('connPill').innerHTML = `<span class="livedot"></span>${Math.round(performance.now() - t0)} ms`;
-  });
+  try {
+    await new Promise((resolve) => {
+      let done = false;
+      const to = setTimeout(() => { if (!done) { done = true; resolve(); } }, 3000);
+      socket.emit('time-sync', { t0: Date.now() }, () => { if (!done) { done = true; clearTimeout(to); resolve(); } });
+    });
+    if (socket.connected) $('connPill').innerHTML = `<span class="livedot"></span>${Math.round(performance.now() - t0)} ms`;
+  } catch {}
 }
 socket.on('connect', probe);
 let wasOffline = false;
 socket.on('disconnect', () => { wasOffline = true; $('connPill').innerHTML = '<span class="livedot idle"></span>Offline'; toast('Link lost — reconnecting'); });
+window.addEventListener('online', () => { try { socket.connect(); } catch {} });
+window.addEventListener('offline', () => { $('connPill').innerHTML = '<span class="livedot idle"></span>Offline'; });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !socket.connected) { try { socket.connect(); } catch {} }
+});
 socket.on('connect', () => {
   if (wasOffline) { wasOffline = false; toast('Link restored'); }
   // socket.id changed on reconnect — old hostId is dead, so silently reclaim
@@ -204,16 +224,74 @@ function flashSpot() {
   const s = $('spot');
   s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash');
 }
+/* 3-2-1 countdown rendering on the spotlight + control deck gating */
+let hostCountdown = null, hostCountdownTimer = null;
+function renderHostCountdown(count, q) {
+  hostCountdown = { count, questionNo: q };
+  setQ(q);
+  paintState(false, q);
+  const w = $('stateWord');
+  w.textContent = `READY ${count}`;
+  $('stateSub').textContent = `Question ${q} — buzzers open in ${count}`;
+  $('spot').classList.remove('has-winner');
+  $('spotKicker').textContent = `Question ${q} — get ready`;
+  $('spotName').textContent = String(count);
+  $('spotMargin').textContent = 'BUZZERS OPEN WHEN THE COUNT HITS ZERO';
+  const sp = $('spot');
+  sp.classList.remove('pop'); void sp.offsetWidth; sp.classList.add('pop');
+  // Gate the deck during the count so double-Next can't stack questions.
+  for (const id of ['armBtn', 'nextBtn']) { const b = $(id); if (b) b.disabled = true; }
+  buzzSoundTick();
+  if (hostCountdownTimer) clearTimeout(hostCountdownTimer);
+  // Local failsafe: if ticks stop (flap), release the deck after 6s.
+  hostCountdownTimer = setTimeout(clearHostCountdownGate, 6000);
+}
+function clearHostCountdownGate() {
+  hostCountdown = null;
+  if (hostCountdownTimer) { clearTimeout(hostCountdownTimer); hostCountdownTimer = null; }
+  for (const id of ['armBtn', 'nextBtn']) { const b = $(id); if (b) b.disabled = false; }
+}
+function buzzSoundTick() {
+  if (!soundOn) return;
+  const ctx = ac(); if (!ctx) return;
+  try {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = 520;
+    g.gain.setValueAtTime(0.22, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.2);
+  } catch {}
+}
 function control(action, extra = {}, retried = false) {
   if (!roomCode) return;
-  if (action === 'arm' || action === 'next') { paintState(true, null); flashSpot(); }
-  else if (action === 'lock' || action === 'reset') paintState(false, null);
-  socket.emit('host-control', { action, ...extra }, (r) => {
-    if (r && !r.ok && !retried && /authorized|room/i.test(r.error || '')) {
-      return reclaimOnce(() => control(action, extra, true));
-    }
-    if (r && !r.ok) toast(r.error || 'Blocked');
-  });
+  if (!socket.connected) { toast('Link lost — reconnecting, try again'); try { socket.connect(); } catch {} return; }
+  if (action === 'next') {
+    // Optimistic countdown — server ticks (3,2,1) correct it; live comes last.
+    const qGuess = (parseInt(($('qNum').textContent || '0'), 10) || 0) + 1;
+    renderHostCountdown(3, qGuess);
+    flashSpot();
+  } else if (action === 'arm') { paintState(true, null); flashSpot(); }
+  else if (action === 'lock' || action === 'reset') { clearHostCountdownGate(); paintState(false, null); }
+  try {
+    socket.timeout(8000).emit('host-control', { action, ...extra }, (err, r) => {
+      if (err) {
+        if (action === 'next') clearHostCountdownGate();
+        toast('Slow link — command may not have landed, watch the spotlight');
+        return;
+      }
+      if (r && !r.ok && !retried && /authorized|room/i.test(r.error || '')) {
+        return reclaimOnce(() => control(action, extra, true));
+      }
+      if (r && !r.ok) {
+        if (action === 'next') clearHostCountdownGate();
+        toast(r.error || 'Blocked');
+      } else if (r?.state?.countdown?.active) {
+        renderHostCountdown(3, r.state.questionNo);
+      }
+    });
+  } catch {
+    toast('Send failed — retry');
+  }
 }
 $('armBtn').onclick = () => control('arm');
 $('lockBtn').onclick = () => control('lock');
@@ -254,12 +332,24 @@ function queueRender() {
     const r = pendingRoom, b = pendingBuzz;
     pendingRoom = pendingBuzz = null;
     if (r) renderAll(r);
-    else if (b) renderRanks(b.buzzes, b.armed, b.questionNo);
+    else if (b) {
+      if (b.countdown?.active) {
+        const remain = Math.max(1, Math.ceil(Math.max(0, (b.countdown.endsAt || Date.now()) - Date.now()) / 1000));
+        renderHostCountdown(Math.min(3, remain), b.questionNo);
+      } else {
+        if (hostCountdown) clearHostCountdownGate();
+        renderRanks(b.buzzes, b.armed, b.questionNo);
+        // Keep the LIVE/LOCKED word in sync when only buzz-updates arrive.
+        paintState(b.armed, b.questionNo);
+      }
+    }
   });
 }
 socket.on('control-event', (d) => {
   if (d?.questionNo) setQ(d.questionNo);
-  if (d?.action === 'arm' || d?.action === 'next') flashSpot();
+  if (d?.action === 'countdown') { renderHostCountdown(d.count || 3, d.questionNo); return; }
+  if (d?.action === 'arm' || d?.action === 'next') { clearHostCountdownGate(); flashSpot(); }
+  if (d?.action === 'lock' || d?.action === 'reset') clearHostCountdownGate();
   // projector flip from the companion remote (own echo is a no-op — no double toast)
   if (d?.action === 'present' && typeof d?.on === 'boolean') {
     if (document.body.classList.contains('present') !== d.on) setPresent(d.on);
@@ -308,10 +398,18 @@ function paintState(armedNow, q) {
 function renderAll({ teams, state }) {
   const tc = `${teams.length} TEAMS`;
   if ($('teamCount')._last !== tc) { $('teamCount')._last = tc; $('teamCount').textContent = tc; }
-  paintState(state.armed, state.questionNo);
+  if (state.countdown?.active) {
+    const remain = Math.max(1, Math.ceil(Math.max(0, (state.countdown.endsAt || Date.now()) - Date.now()) / 1000));
+    renderHostCountdown(Math.min(3, remain), state.questionNo);
+  } else if (hostCountdown) {
+    clearHostCountdownGate();
+    paintState(state.armed, state.questionNo);
+  } else {
+    paintState(state.armed, state.questionNo);
+  }
   paintProgress(teams.length, state.buzzes);
   renderRoster(teams, state.buzzes);
-  renderRanks(state.buzzes, state.armed, state.questionNo);
+  renderRanks(state.buzzes, state.armed, state.questionNo, state.countdown);
 }
 function paintProgress(total, buzzes) {
   const n = new Set((buzzes || []).map((b) => b.teamId)).size;
@@ -365,8 +463,10 @@ function renderRoster(teams, buzzes = []) {
 const rankRows = new Map(), rankHtml = new Map();
 let lastSpotKey = null, lastEmpty = null;
 const seenBuzz = new Set();
-function renderRanks(buzzes = [], armed, q) {
+function renderRanks(buzzes = [], armed, q, countdownState) {
   if (q != null) setQ(q);
+  // Countdown owns the spotlight — standings stay empty underneath it.
+  if (countdownState?.active || hostCountdown) return;
   const empty = !buzzes.length;
   if (lastEmpty !== empty) { lastEmpty = empty; $('emptyHint').style.display = empty ? 'block' : 'none'; }
   const w = buzzes[0] || null;

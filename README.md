@@ -3,7 +3,47 @@
 Broadcast-grade buzzer system. One laptop hosts, up to twenty phones/tablets buzz in,
 results ranked by latency-compensated time, plus a PIN-locked companion remote.
 
-## Deploy (Vercel)
+## Hosting — read this before event day
+
+This is a persistent Socket.IO timing server: it holds every buzzer socket
+open and keeps rooms in memory. That architecture decides where it can run.
+
+- **Vercel (hobby) is the cause of the random disconnects.** Vercel Functions
+  cap a socket at ~5 minutes, pin each connection to its own function
+  instance, and wipe in-memory rooms on every cold start/scale event. Players
+  landing on different instances can't even see the same room. No client
+  retry logic can fix that — the server itself disappears underneath them.
+- **Use one of the two free paths below.** Both cost nothing.
+
+### Option A — event laptop + tunnel (recommended, zero sleep, lowest latency)
+
+The laptop is the server; a free tunnel gives it a public URL for phones on
+mobile data. No account, no card, nothing sleeps mid-quiz:
+
+```bash
+npm install
+npm start
+# new terminal:
+cloudflared tunnel --url http://localhost:3000
+# open the printed https://…trycloudflare.com/host.html on the projector,
+# create the room — QR codes encode the public URL automatically.
+```
+
+(`cloudflared` is a single free binary from cloudflare.com. Same-Wi-Fi play
+works even without the tunnel, via the LAN URLs printed at startup.)
+
+### Option B — Render free tier (no card, good when the laptop can't host)
+
+1. Push this repo to GitHub.
+2. Render Dashboard → New → Blueprint → select the repo (`render.yaml`
+   sets plan `free`, start `npm start`, health check `/health`).
+3. Open `https://<your-app>.onrender.com/host.html`.
+
+Free services sleep after 15 min without traffic (first load takes ~1 min),
+so open the host page 10 min before the event. During the quiz the 10 s
+host probe plus player sync traffic keeps it awake.
+
+## Deploy (Vercel — static only, NOT for the timing server)
 
 Push this folder to the repo connected to Vercel and redeploy — no extra config.
 Join links and the QR resolve automatically:

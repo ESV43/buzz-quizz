@@ -386,3 +386,19 @@ body.light .spot.flash{animation:spotFlashLight .8s ease}
 body.light #edgeFlash.go{animation:edgeGoLight 1s ease}
 @keyframes edgeGoLight{0%{opacity:0; box-shadow:inset 0 0 0 3px var(--accent), inset 0 0 70px rgba(0,113,227,.25)}
   25%{opacity:1}100%{opacity:0; box-shadow:inset 0 0 0 3px transparent, inset 0 0 70px transparent}}
+
+/* ---------- 3-2-1 countdown overlay (player terminal) ---------- */
+#countOverlay{position:fixed; inset:0; z-index:65; display:none; place-items:center;
+  align-content:center; text-align:center; pointer-events:none;
+  background:rgba(6,8,10,.55); backdrop-filter:blur(2px)}
+#countOverlay.show{display:grid; animation:toastIn .2s ease}
+#countOverlay .count-num{font-family:var(--fd); font-weight:800; font-size:clamp(110px,34vw,210px);
+  line-height:1; letter-spacing:-.02em; color:var(--gold); text-shadow:0 10px 60px rgba(0,0,0,.5)}
+#countOverlay .count-num.pop{animation:countPop .5s cubic-bezier(.2,.9,.25,1.15)}
+@keyframes countPop{from{transform:scale(.6); opacity:0} to{transform:scale(1); opacity:1}}
+#countOverlay .count-sub{font-family:var(--fm); font-size:12px; letter-spacing:.26em; color:var(--ink); margin-top:10px}
+body.light #countOverlay{background:rgba(245,245,247,.6)}
+body.light #countOverlay .count-num{color:var(--gold); text-shadow:0 8px 30px rgba(0,0,0,.12)}
+/* disabled deck buttons during countdown */
+.btn:disabled{opacity:.45}
+#spot .s-name.counting{color:var(--gold)}
