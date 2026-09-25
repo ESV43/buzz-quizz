@@ -9,6 +9,7 @@
  */
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const QRCode = require('qrcode');
@@ -108,6 +109,73 @@ function companionLinks(socket, code) {
 // roomCode -> room
 const rooms = new Map();
 
+// ---- room persistence: survive server restarts (file-backed) ----
+// Socket/grants are ephemeral; teams + standings + PIN are durable.
+// On boot everyone rejoins silently: host via host-rejoin, teams by teamId.
+const DATA_FILE = path.join(__dirname, 'rooms.json');
+let saveTimer = null;
+function queueSave() {
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => { saveTimer = null; saveRooms(); }, 500);
+}
+function saveRooms() {
+  try {
+    const data = [...rooms.values()].map((room) => ({
+      code: room.code,
+      createdAt: room.createdAt,
+      lastActivity: room.lastActivity,
+      maxTeams: room.maxTeams,
+      companionPin: room.companionPin,
+      questionNo: room.state.questionNo,
+      buzzes: room.state.buzzes,
+      teams: [...room.teams.values()].map((t) => ({
+        id: t.id, name: t.name, color: t.color,
+        rtt: t.rtt ?? null, offset: t.offset ?? null,
+        away: !!t.away, lastSeen: t.lastSeen || Date.now(),
+      })),
+    }));
+    const tmp = DATA_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ v: 1, savedAt: Date.now(), rooms: data }));
+    fs.renameSync(tmp, DATA_FILE);
+  } catch (e) { console.error('room save failed:', e.message); }
+}
+function loadRooms() {
+  let raw;
+  try { raw = fs.readFileSync(DATA_FILE, 'utf8'); } catch { return; }
+  try {
+    const data = JSON.parse(raw);
+    for (const r of data.rooms || []) {
+      if (!r.code || rooms.has(r.code)) continue;
+      const room = {
+        code: r.code, createdAt: r.createdAt || Date.now(),
+        lastActivity: r.lastActivity || Date.now(),
+        maxTeams: r.maxTeams || 20, hostId: null, companionIds: new Set(),
+        companionPin: r.companionPin || makePin(4), failedAttempts: new Map(),
+        teams: new Map(), socketToTeam: new Map(),
+        pendingDisconnect: new Map(), countdownTimers: [],
+        // In-flight countdowns can't resume across a restart — restore locked
+        // on the same question with standings intact; host re-arms (3-2-1).
+        state: {
+          armed: false, questionNo: r.questionNo || 0,
+          buzzes: Array.isArray(r.buzzes) ? r.buzzes : [], countdown: null,
+        },
+      };
+      for (const t of r.teams || []) {
+        if (!t.id) continue;
+        room.teams.set(t.id, {
+          id: t.id, name: String(t.name || 'Team').slice(0, 24),
+          color: t.color || '#888', socketId: null,
+          connected: false, away: !!t.away,
+          rtt: t.rtt ?? null, offset: t.offset ?? null,
+          lastSeen: t.lastSeen || Date.now(),
+        });
+      }
+      rooms.set(room.code, room);
+    }
+    if (rooms.size) console.log(`  Restored ${rooms.size} room(s) from disk`);
+  } catch (e) { console.error('room load failed:', e.message); }
+}
+
 function publicTeams(room) {
   return [...room.teams.values()].map((t) => ({
     id: t.id, name: t.name, color: t.color,
@@ -127,6 +195,7 @@ function publicState(room) {
 }
 function broadcastRoom(room) {
   io.to(room.code).emit('room-update', { teams: publicTeams(room), state: publicState(room) });
+  queueSave(); // every roster/state change is durable within ~0.5s
 }
 function rankBuzzes(room) {
   room.state.buzzes.sort((a, b) => a.adjustedTime - b.adjustedTime);
@@ -549,9 +618,12 @@ setInterval(() => {
     if ((empty && idle > 1000 * 60 * 60 * 4) || idle > 1000 * 60 * 60 * 12) {
       clearCountdown(room);
       rooms.delete(code);
+      queueSave();
     }
   }
 }, 60_000);
+
+loadRooms();
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  BUZZ ARENA live on :${PORT}`);

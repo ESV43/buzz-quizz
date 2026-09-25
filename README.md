@@ -84,6 +84,9 @@ Focus state never gates buzzing — it only flags the team for host/companion.
 
 ## Notes
 
+- Persistence: rooms auto-save to `rooms.json` (~0.5s after any change) and
+  restore on restart — host reclaims via Reclaim, teams reattach by saved
+  `teamId` with their buzz intact. In-flight 3-2-1 restores as locked; re-arm.
 - Fairness: 8-sample median clock sync per buzzer; ranking by
   `clientPress + offset`, with RTT/offset shown per team.
 - Companion: separate 4-digit PIN, 3 wrong tries → 30 s lockout + host alert,

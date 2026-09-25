@@ -41,7 +41,39 @@ function buzzSound() {
 }
 function speak(text) {
   if (!voiceOn || !('speechSynthesis' in window)) return;
-  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.05; speechSynthesis.speak(u); } catch {}
+  try {
+    // Drop any queued phrase so the winner call is never talked over.
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.95; u.pitch = 1; u.volume = 1; u.lang = 'en-US';
+    if (pickedVoice) u.voice = pickedVoice;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+/* pick the clearest English voice for the P1 announcement */
+let pickedVoice = null;
+function pickVoice() {
+  try {
+    const vs = speechSynthesis.getVoices() || [];
+    if (!vs.length) return null;
+    const en = vs.filter((v) => /^en/i.test(v.lang || ''));
+    const pool = en.length ? en : vs;
+    return pool.find((v) => /google us english/i.test(v.name || ''))
+      || pool.find((v) => /natural|neural|samantha|zira|david|aria/i.test(v.name || ''))
+      || pool.find((v) => v.default) || pool[0] || null;
+  } catch { return null; }
+}
+if ('speechSynthesis' in window) {
+  try {
+    pickedVoice = pickVoice();
+    speechSynthesis.onvoiceschanged = () => { pickedVoice = pickVoice(); };
+  } catch {}
+}
+/* P1 announcement: team name spoken aloud + replayable from the deck */
+let currentWinner = null; // { id, name, color } — cleared when standings empty
+function announceWinner(name) {
+  if (!name) return;
+  speak(`${name} buzzed first`);
 }
 
 /* canvas celebration FX */
@@ -49,14 +81,15 @@ const fx = $('fx'), fctx = fx.getContext('2d');
 let parts = [], fxRun = false;
 function sizeFx() { fx.width = innerWidth; fx.height = innerHeight; }
 addEventListener('resize', sizeFx); sizeFx();
-function confettiBurst() {
-  const cols = ['#d9a441', '#edeff2', '#626b77', '#34d17b'];
+function confettiBurst(teamColor) {
+  const base = /^#[0-9a-f]{6}$/i.test(teamColor || '') ? teamColor : '#d9a441';
+  const cols = [base, '#ffffff', '#d9a441', base, '#edeff2'];
   for (let i = 0; i < 130; i++) parts.push({
     x: innerWidth / 2 + (Math.random() - .5) * 260, y: innerHeight * 0.28,
     vx: (Math.random() - .5) * 9, vy: -Math.random() * 9 - 3, g: .26,
     w: 3 + Math.random() * 3, h: 7 + Math.random() * 8,
     r: Math.random() * Math.PI, vr: (Math.random() - .5) * .3,
-    c: cols[i % 4], life: 80 + Math.random() * 45,
+    c: cols[i % cols.length], life: 80 + Math.random() * 45,
   });
   if (!fxRun) { fxRun = true; requestAnimationFrame(fxTick); }
 }
@@ -317,6 +350,10 @@ $('resetBtn').onclick = (e) => {
 };
 $('soundBtn').onclick = (e) => { soundOn = !soundOn; e.currentTarget.textContent = `Sound ${soundOn ? 'on' : 'off'}`; };
 $('voiceBtn').onclick = (e) => { voiceOn = !voiceOn; e.currentTarget.textContent = `Voice ${voiceOn ? 'on' : 'off'}`; };
+$('announceBtn').onclick = () => {
+  if (currentWinner) { announceWinner(currentWinner.name); toast(`Announced: ${currentWinner.name}`); }
+  else toast('No winner to announce yet');
+};
 document.addEventListener('keydown', (e) => {
   if ($('studio').style.display === 'none') return;
   if (e.code === 'Space') { e.preventDefault(); control($('stateWord').classList.contains('live') ? 'lock' : 'arm'); }
@@ -492,6 +529,7 @@ function renderRanks(buzzes = [], armed, q, countdownState) {
   }
   const tb = $('rankBody');
   if (empty) {
+    currentWinner = null;
     if (tb._emptied !== true) { tb._emptied = true; tb.innerHTML = ''; }
     for (const [, tr] of rankRows) tr.remove();
     rankRows.clear(); rankHtml.clear(); seenBuzz.clear();
@@ -532,7 +570,8 @@ function renderRanks(buzzes = [], armed, q, countdownState) {
   }
   if (w && w.teamId !== lastWinnerId) {
     lastWinnerId = w.teamId;
-    buzzSound(); speak(`${w.teamName} buzzed first`); confettiBurst();
+    currentWinner = { id: w.teamId, name: w.teamName, color: w.color };
+    buzzSound(); announceWinner(w.teamName); confettiBurst(w.color);
     const sp = $('spot');
     sp.classList.remove('pop'); void sp.offsetWidth; sp.classList.add('pop');
   }
