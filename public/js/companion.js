@@ -160,8 +160,9 @@ socket.on('focus-alert', (d) => {
 function paint(state, teams) {
   if (!state) return;
   if (state.countdown?.active) {
-    const remain = Math.max(1, Math.ceil(Math.max(0, (state.countdown.endsAt || Date.now()) - Date.now()) / 1000));
-    showCompCountdown(Math.min(3, remain), state.questionNo);
+    // Same +60ms grace as player/host so the remote digit flips in step.
+    const remain = Math.max(0, (state.countdown.endsAt || Date.now()) - Date.now());
+    showCompCountdown(Math.min(3, Math.max(1, Math.ceil((remain + 60) / 1000))), state.questionNo);
     return;
   }
   if (compCountdown) clearCompCountdownGate();

@@ -259,6 +259,11 @@ function flashSpot() {
 }
 /* 3-2-1 countdown rendering on the spotlight + control deck gating */
 let hostCountdown = null, hostCountdownTimer = null;
+/* +60ms grace absorbs server-timer drift + socket transit so the spotlight
+   digit flips in step with player terminals instead of a frame early. */
+function hostTickFromRemain(remainMs) {
+  return Math.min(3, Math.max(1, Math.ceil((Math.max(0, remainMs) + 60) / 1000)));
+}
 function renderHostCountdown(count, q) {
   // De-dupe: buzz-update + room-update + control-event can all deliver the
   // same tick — re-popping + re-ticking each time is what looked jittery.
@@ -377,8 +382,8 @@ function queueRender() {
     if (r) renderAll(r);
     else if (b) {
       if (b.countdown?.active) {
-        const remain = Math.max(1, Math.ceil(Math.max(0, (b.countdown.endsAt || Date.now()) - Date.now()) / 1000));
-        renderHostCountdown(Math.min(3, remain), b.questionNo);
+        const remain = Math.max(0, (b.countdown.endsAt || Date.now()) - Date.now());
+        renderHostCountdown(hostTickFromRemain(remain), b.questionNo);
       } else {
         if (hostCountdown) clearHostCountdownGate();
         renderRanks(b.buzzes, b.armed, b.questionNo);
@@ -442,8 +447,8 @@ function renderAll({ teams, state }) {
   const tc = `${teams.length} TEAMS`;
   if ($('teamCount')._last !== tc) { $('teamCount')._last = tc; $('teamCount').textContent = tc; }
   if (state.countdown?.active) {
-    const remain = Math.max(1, Math.ceil(Math.max(0, (state.countdown.endsAt || Date.now()) - Date.now()) / 1000));
-    renderHostCountdown(Math.min(3, remain), state.questionNo);
+    const remain = Math.max(0, (state.countdown.endsAt || Date.now()) - Date.now());
+    renderHostCountdown(hostTickFromRemain(remain), state.questionNo);
   } else if (hostCountdown) {
     clearHostCountdownGate();
     paintState(state.armed, state.questionNo);

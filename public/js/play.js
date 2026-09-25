@@ -38,6 +38,24 @@ function ensureCountdownOverlay() {
   d.innerHTML = '<div class="count-num" id="countNum">3</div><div class="count-sub" id="countSub">GET READY</div>';
   document.body.appendChild(d);
 }
+/* server-clock-corrected now: endsAt lives on the server clock, so remaining
+   must subtract the measured offset — otherwise ticks flip early/late and the
+   big number looks like it stutters. */
+function nowServer() { return Date.now() + (clockOffset || 0); }
+/* +60ms grace: absorbs server setTimeout drift + socket transit so the digit
+   flips within ~1 frame of the server tick echo instead of ahead of it. */
+function tickFromRemain(remainMs) { return Math.max(1, Math.ceil((Math.max(0, remainMs) + 60) / 1000)); }
+function startCountdownTicker() {
+  if (countdownTimer) return;
+  countdownTimer = setInterval(() => {
+    if (!countdown) { clearInterval(countdownTimer); countdownTimer = null; return; }
+    const r = Math.max(0, countdown.endsAt - nowServer());
+    if (r <= 0) { hideCountdown(); return; }
+    const c = Math.min(3, tickFromRemain(r));
+    const n = $('countNum');
+    if (n && n.textContent !== String(c)) showCountdown(c, countdown.questionNo);
+  }, 100);
+}
 function showCountdown(count, q) {
   ensureCountdownOverlay();
   // De-dupe: room-update + buzz-update + control-event can deliver the same
@@ -69,21 +87,12 @@ function syncCountdownFromState(state) {
     pendingBuzz = null; myBuzz = null;
     countdown = { questionNo: cd.questionNo, endsAt: cd.endsAt };
     // Derive current tick from server clock so a rejoin mid-countdown lands right.
-    const remainMs = Math.max(0, (cd.endsAt || Date.now()) - Date.now());
-    const count = Math.max(1, Math.ceil(remainMs / 1000));
+    const remainMs = Math.max(0, (cd.endsAt || nowServer()) - nowServer());
+    const count = Math.min(3, tickFromRemain(remainMs));
     armed = false;
-    showCountdown(Math.min(3, count), cd.questionNo);
+    showCountdown(count, cd.questionNo);
     paintState();
-    if (!countdownTimer) {
-      countdownTimer = setInterval(() => {
-        if (!countdown) { clearInterval(countdownTimer); countdownTimer = null; return; }
-        const r = Math.max(0, countdown.endsAt - Date.now());
-        if (r <= 0) { hideCountdown(); return; }
-        const c = Math.max(1, Math.ceil(r / 1000));
-        const n = $('countNum');
-        if (n && n.textContent !== String(Math.min(3, c))) showCountdown(Math.min(3, c), countdown.questionNo);
-      }, 250);
-    }
+    startCountdownTicker();
   } else if (countdown) {
     hideCountdown();
   }
@@ -277,12 +286,14 @@ function readout(cls, pos, sub) {
   $('rankLine').textContent = sub;
 }
 function triggerGlow() {
-  // visible click glow: same-frame feedback even before server confirms
+  // visible click glow: same-frame feedback even before server confirms.
+  // Timeout matches the .hit animation length so the handoff back to the
+  // idle pulse is seamless.
   btn.classList.remove('hit'); dial.classList.remove('hit');
   void btn.offsetWidth;
   btn.classList.add('hit'); dial.classList.add('hit');
   clearTimeout(triggerGlow._h);
-  triggerGlow._h = setTimeout(() => { btn.classList.remove('hit'); dial.classList.remove('hit'); }, 750);
+  triggerGlow._h = setTimeout(() => { btn.classList.remove('hit'); dial.classList.remove('hit'); }, 700);
 }
 function setSending(sub) {
   btn.classList.add('pressed', 'sending');
@@ -463,10 +474,11 @@ socket.on('control-event', (d) => {
     const c = Math.max(1, Math.min(3, d.count || 3));
     myBuzz = null; pendingBuzz = null;
     armed = false;
-    countdown = { questionNo: d.questionNo || questionNo, endsAt: d.endsAt || (Date.now() + c * 1000) };
+    countdown = { questionNo: d.questionNo || questionNo, endsAt: d.endsAt || (nowServer() + c * 1000) };
     if (d.questionNo) questionNo = d.questionNo;
     showCountdown(c, questionNo);
     paintState();
+    startCountdownTicker();
     return;
   }
   if (d?.action === 'arm') {
@@ -496,6 +508,12 @@ function onRoomUpdate({ state }) {
   renderMini(state.buzzes || []);
   if (myBuzz) renderMine();
 }
+function setBtnMode(mode) {
+  // Swap only the state class — wiping className here used to kill the
+  // in-flight hit/shake/sending/pressed visuals on every room-update.
+  if (mode === 'armed') { btn.classList.remove('locked'); btn.classList.add('armed'); }
+  else { btn.classList.remove('armed'); btn.classList.add('locked'); }
+}
 function paintState() {
   $('qPill').textContent = questionNo ? 'Q' + questionNo : '–';
   if (countdown) {
@@ -504,7 +522,7 @@ function paintState() {
     dial.classList.remove('armed');
     btn.classList.remove('sending');
     if (!pendingBuzz) {
-      btn.textContent = 'READY'; btn.className = 'locked';
+      btn.textContent = 'READY'; setBtnMode('locked');
       readout('st-idle', 'READY', `Q${questionNo} STARTS — HOLD`);
     }
     return;
@@ -514,12 +532,12 @@ function paintState() {
   dial.classList.toggle('armed', armed && !myBuzz);
   if (!pendingBuzz) btn.classList.remove('sending');
   if (!armed) {
-    btn.textContent = 'WAIT'; btn.className = 'locked';
+    btn.textContent = 'WAIT'; setBtnMode('locked');
     readout('st-idle', 'LOCKED', questionNo ? `Q${questionNo} CLOSED — WAIT FOR HOST` : 'WAITING FOR HOST');
   } else if (myBuzz) {
-    btn.textContent = 'P' + myBuzz.rank; btn.className = 'armed';
+    btn.textContent = 'P' + myBuzz.rank; setBtnMode('armed');
   } else {
-    btn.textContent = pendingBuzz ? '···' : 'BUZZ'; btn.className = 'armed';
+    btn.textContent = pendingBuzz ? '···' : 'BUZZ'; setBtnMode('armed');
     if (!pendingBuzz) readout('st-live', 'LIVE', 'BOTH PLAYERS MAY PRESS');
   }
 }
@@ -527,19 +545,22 @@ function renderMine() {
   if (!myBuzz) return;
   if (myBuzz.rank === 1) { fanfare(); triggerGlow(); }
   paintState();
-  // placement reveal: ordinal + field size + animated margin count-up
+  // placement reveal: ordinal + field size + eased margin count-up.
+  // Writes are throttled to changed strings only — per-frame DOM writes made
+  // the readout shimmer.
   const r = myBuzz.rank, dest = myBuzz.deltaMs;
   const total = Math.max(lastCount, r);
   const title = r === 1 ? 'FIRST' : ord(r);
   const tk = ++mineToken;
-  const t0 = performance.now(), dur = 600;
+  const t0 = performance.now(), dur = 550;
+  let lastSub = null;
   readout('st-placed', title, 'CONFIRMING PLACE');
   (function frame(t) {
     if (tk !== mineToken) return;
     const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
     const mg = r === 1 ? '+0' : '+' + Math.round(dest * e);
-    readout('st-placed', title,
-      r === 1 ? `1ST OF ${total} — PRESS CONFIRMED` : `${ord(r)} OF ${total} · ${mg} MS`);
+    const sub = r === 1 ? `1ST OF ${total} — PRESS CONFIRMED` : `${ord(r)} OF ${total} · ${mg} MS`;
+    if (sub !== lastSub) { lastSub = sub; readout('st-placed', title, sub); }
     if (p < 1) requestAnimationFrame(frame);
   })(t0);
 }
