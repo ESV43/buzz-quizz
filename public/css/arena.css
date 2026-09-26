@@ -485,15 +485,24 @@ body.light #countOverlay .count-num{color:var(--gold); text-shadow:0 6px 24px rg
   .btn{min-height:54px; font-size:13px}
   #countOverlay .count-num{font-size:clamp(140px,26vw,260px)}
 }
-/* Tablet landscape: dial left, status/order right — no long scroll. */
-@media(min-width:700px) and (max-width:1180px) and (orientation:landscape){
-  body .wrap{max-width:960px}
-  #playView .stagelayout{display:grid; grid-template-columns:minmax(300px,420px) minmax(0,1fr); gap:26px; align-items:center}
-  #playView .stagelayout .stage{min-width:0}
-  #playView .stagelayout .side{min-width:0; max-width:100%}
-  #playView .readout .r-pos{font-size:clamp(22px,3vw,30px)}
-  .stage{padding:18px 0}
-  .dial{width:min(36vw,380px); height:min(36vw,380px)}
+/* Tablet landscape: full-bleed two columns that fill the viewport — dial
+ * sized to screen height (wide-but-short screens), status column stretched. */
+@media(min-width:700px) and (orientation:landscape){
+  body .wrap{max-width:1240px; padding-left:28px; padding-right:28px}
+  #playView .phead{margin-top:14px !important}
+  #playView .stagelayout{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); gap:32px; align-items:stretch}
+  #playView .stagelayout .stage{min-width:0; display:flex; align-items:center; justify-content:center; padding:8px 0}
+  #playView .stagelayout .side{min-width:0; max-width:100%; display:flex; flex-direction:column; justify-content:center; gap:16px}
+  #playView .readout{padding:26px 22px}
+  #playView .readout .r-pos{font-size:clamp(30px,4vw,44px)}
+  #playView .readout .r-sub{font-size:clamp(13px,1.4vw,16px)}
+  #playView .order{margin-top:0}
+  #playView .order .orow{font-size:16px; padding:12px 4px}
+  .stage{padding:8px 0}
+  .dial{width:min(56vh,440px); height:min(56vh,440px)}
+  #buzzBtn{font-size:clamp(30px,4vw,44px)}
+  .ident{margin:14px 0 4px}
+  .ident h1{font-size:clamp(30px,3.6vw,44px)}
 }
 /* Player portrait tablets: keep stacked but use width — order list 2-col. */
 @media(min-width:700px) and (max-width:1024px) and (orientation:portrait){
