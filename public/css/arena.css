@@ -210,11 +210,20 @@ table.board td:nth-child(2){max-width:34vw}
   opacity:.58;
   box-shadow:0 0 0 2px rgba(255,90,90,.42), 0 0 44px rgba(229,72,77,.42), 0 0 100px rgba(229,72,77,.22), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.35), inset 0 -18px 34px rgba(0,0,0,.35);
   animation:armedPulse 2.8s ease-in-out infinite}
-@keyframes armedPulse{0%,100%{box-shadow:0 0 0 2px rgba(255,90,90,.42), 0 0 44px rgba(229,72,77,.42), 0 0 100px rgba(229,72,77,.22), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.35), inset 0 -18px 34px rgba(0,0,0,.35)}
-  50%{box-shadow:0 0 0 2px rgba(255,90,90,.58), 0 0 58px rgba(229,72,77,.58), 0 0 122px rgba(229,72,77,.3), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.42), inset 0 -18px 34px rgba(0,0,0,.32)}}
+/* Team-colored dial: each team glows in its own color (server assigns 8
+   distinct colors). The red rule above stays as fallback where color-mix
+   is unsupported. */
+#buzzBtn.armed{color:#fff; border-color:var(--team);
+  background:radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--team) 78%, white) 0%, color-mix(in srgb, var(--team) 88%, white) 32%, var(--team) 58%, color-mix(in srgb, var(--team) 62%, black) 100%);
+  opacity:.8;
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--team) 45%, transparent), 0 0 44px color-mix(in srgb, var(--team) 45%, transparent), 0 0 100px color-mix(in srgb, var(--team) 25%, transparent), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.35), inset 0 -18px 34px rgba(0,0,0,.35)}
+@keyframes armedPulse{0%,100%{box-shadow:0 0 0 2px color-mix(in srgb, var(--team) 45%, transparent), 0 0 44px color-mix(in srgb, var(--team) 45%, transparent), 0 0 100px color-mix(in srgb, var(--team) 25%, transparent), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.35), inset 0 -18px 34px rgba(0,0,0,.35)}
+  50%{box-shadow:0 0 0 2px color-mix(in srgb, var(--team) 60%, transparent), 0 0 58px color-mix(in srgb, var(--team) 60%, transparent), 0 0 122px color-mix(in srgb, var(--team) 32%, transparent), 0 22px 60px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.42), inset 0 -18px 34px rgba(0,0,0,.32)}}
 #buzzBtn.armed.pressed, #buzzBtn.armed:active, #buzzBtn.armed.sending, #buzzBtn.armed.hit{opacity:1; transform:translateZ(0) scale(.96);
   color:#fff; border-color:#ff7a7a;
   background:radial-gradient(circle at 50% 30%, #ff7b7b 0%, #f04444 38%, #d21f26 68%, #8f0f15 100%)}
+#buzzBtn.armed.pressed, #buzzBtn.armed:active, #buzzBtn.armed.sending, #buzzBtn.armed.hit{color:#fff; border-color:color-mix(in srgb, var(--team) 55%, white);
+  background:radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--team) 70%, white) 0%, var(--team) 38%, color-mix(in srgb, var(--team) 78%, black) 68%, color-mix(in srgb, var(--team) 56%, black) 100%)}
 #buzzBtn:active{transform:translateZ(0) scale(.965)}
 #buzzBtn.pressed{transform:translateZ(0) scale(.96)}
 #buzzBtn.locked{cursor:not-allowed}
@@ -222,7 +231,7 @@ table.board td:nth-child(2){max-width:34vw}
 #buzzBtn.shake{animation:shake .32s cubic-bezier(.2,.7,.3,1)}
 @keyframes shake{0%,100%{transform:translateZ(0) translateX(0)} 30%{transform:translateZ(0) translateX(-5px)} 60%{transform:translateZ(0) translateX(4px)} 80%{transform:translateZ(0) translateX(-2px)}}
 #buzzBtn .ripple{position:absolute; left:50%; top:50%; width:140px; height:140px; border-radius:50%; pointer-events:none;
-  background:radial-gradient(circle, rgba(255,255,255,.9) 0%, rgba(255,120,120,.55) 45%, transparent 70%); opacity:.7; transform:translate(-50%,-50%) scale(0); animation:rip .45s cubic-bezier(.2,.7,.2,1) forwards}
+  background:radial-gradient(circle, rgba(255,255,255,.9) 0%, var(--team) 45%, transparent 70%); opacity:.7; transform:translate(-50%,-50%) scale(0); animation:rip .45s cubic-bezier(.2,.7,.2,1) forwards}
 @keyframes rip{to{transform:translate(-50%,-50%) scale(2.2); opacity:0}}
 .readout{border:1px solid var(--line-soft); border-radius:10px; background:var(--panel); padding:16px 18px; text-align:center; min-height:86px;
   display:flex; flex-direction:column; justify-content:center; gap:3px; min-width:0; max-width:100%; overflow:hidden}
@@ -293,10 +302,10 @@ body.present #exitPresent{display:block}
 #buzzBtn.hit{animation:buzzGlow .7s cubic-bezier(.2,.7,.2,1)}
 .dial.hit .dial-ticks{animation:tickspin 24s linear infinite}
 @keyframes buzzGlow{
-  0%{box-shadow:0 0 0 4px rgba(255,255,255,.9), 0 0 90px rgba(255,80,80,.9), 0 0 170px rgba(229,72,77,.55), 0 22px 60px rgba(0,0,0,.6)}
-  100%{box-shadow:0 0 0 2px rgba(255,90,90,.42), 0 0 44px rgba(229,72,77,.42), 0 0 100px rgba(229,72,77,.22), 0 22px 60px rgba(0,0,0,.6)}
+  0%{box-shadow:0 0 0 4px rgba(255,255,255,.9), 0 0 90px color-mix(in srgb, var(--team) 70%, white), 0 0 170px color-mix(in srgb, var(--team) 55%, transparent), 0 22px 60px rgba(0,0,0,.6)}
+  100%{box-shadow:0 0 0 2px color-mix(in srgb, var(--team) 45%, transparent), 0 0 44px color-mix(in srgb, var(--team) 45%, transparent), 0 0 100px color-mix(in srgb, var(--team) 25%, transparent), 0 22px 60px rgba(0,0,0,.6)}
 }
-.dial.armed .dial-ticks{filter:drop-shadow(0 0 6px rgba(229,72,77,.55)); will-change:transform}
+.dial.armed .dial-ticks{filter:drop-shadow(0 0 6px var(--team)); will-change:transform}
 
 /* ---------- fx + toast ---------- */
 #fx{position:fixed; inset:0; pointer-events:none; z-index:60}
@@ -411,6 +420,10 @@ body.light #buzzBtn.armed{color:#fff; border-color:rgba(229,72,77,.85);
   opacity:.6;
   box-shadow:0 0 0 2px rgba(229,72,77,.4), 0 0 44px rgba(229,72,77,.4), 0 0 100px rgba(229,72,77,.22), 0 20px 44px rgba(0,0,0,.18), inset 0 2px 0 rgba(255,255,255,.45), inset 0 -14px 28px rgba(0,0,0,.22);
   animation:armedPulse 2.8s ease-in-out infinite}
+body.light #buzzBtn.armed{color:#fff; border-color:var(--team);
+  background:radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--team) 78%, white) 0%, color-mix(in srgb, var(--team) 88%, white) 35%, var(--team) 65%, color-mix(in srgb, var(--team) 62%, black) 100%);
+  opacity:.8;
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--team) 40%, transparent), 0 0 44px color-mix(in srgb, var(--team) 40%, transparent), 0 0 100px color-mix(in srgb, var(--team) 22%, transparent), 0 20px 44px rgba(0,0,0,.18), inset 0 2px 0 rgba(255,255,255,.45), inset 0 -14px 28px rgba(0,0,0,.22)}
 body.light #buzzBtn.armed.pressed, body.light #buzzBtn.armed:active, body.light #buzzBtn.armed.sending, body.light #buzzBtn.armed.hit{opacity:1}
 body.light #buzzBtn.sending{color:#fff}
 body.light .readout.st-live .r-pos{color:var(--go)}
