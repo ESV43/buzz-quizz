@@ -73,8 +73,8 @@ npm start
 `time-sync` · `create-room {maxTeams, wantedCode?}` · `host-rejoin {code}` ·
 `join-as-player {code, teamName, teamId?, offset, rtt}` · `update-netstats` ·
 `focus-status {away}` · `rename-team {name}` · `buzz {clientPressTime, offset, rtt}` ·
-`host-control {action: arm|lock|reset|next|clear|present}` · `kick-team {teamId}` ·
-`join-as-companion {code, pin}` → events `room-update` (teams carry
+`host-control {action: arm|lock|reset|next|clear|present|overlay}` · `kick-team {teamId}` ·
+`join-as-companion {code, pin}` · `join-as-spectator {code}` (read-only OBS overlay) → events `room-update` (teams carry
 `connected` + `away`), `buzz-update`, `control-event`, `kicked`,
 `security-alert`, `focus-alert {teamId, teamName, away}`, `netstats`.
 
@@ -90,6 +90,12 @@ Focus state never gates buzzing — it only flags the team for host/companion.
 - Fairness: 8-sample median clock sync per buzzer; ranking by
   `clientPress + offset`, with RTT/offset shown per team.
 - Companion: separate 4-digit PIN, 3 wrong tries → 30 s lockout + host alert,
-  restricted to arm / lock / reset / next / clear / present (projector flip).
+  restricted to arm / lock / reset / next / clear / present / overlay (projector flip + OBS overlay toggle).
+- Slides overlay: open `/overlay.html?room=XXXXX` as an OBS Browser Source
+  (transparent lower-third spectator, read-only). Host deck (`Overlay on/off`,
+  key `O`) and the companion remote (`Overlay: on/off`) flip it per slide —
+  show it on quiz slides, hide it on the rest. Params: `style=lower-third|
+  topbar|center`, `top=3` (1–8 rows), `hideIdle=1` (hide when locked + empty),
+  `startHidden=1` (wait for the host to show it).
 - WakeLock keeps buzzer and remote screens on; multitouch-safe big button
   (one press per team per question).

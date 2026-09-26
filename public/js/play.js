@@ -25,7 +25,49 @@ if (params.get('room')) $('roomInput').value = params.get('room').toUpperCase();
 try { $('roomInput').value ||= localStorage.getItem('buzz-room') || ''; $('nameInput').value ||= localStorage.getItem('buzz-name') || ''; } catch {}
 
 function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2400); }
-async function keepAwake() { try { await navigator.wakeLock?.request('screen'); } catch {} }
+/* ---- screen wake: shared hardened layer (WakeLock + looping video) ----
+ * window.BuzzWake (js/wake.js) holds BOTH layers at all times, reclaims every
+ * 8s + on every gesture/return. Nothing is ever asked of the player during
+ * the event. WakeLock needs https; on plain-LAN http the video layer is what
+ * keeps the display alive — use the https link when you have it. */
+const wakeApi = () => (window.BuzzWake ? window.BuzzWake.hasApi() : ('wakeLock' in navigator));
+function wakeMode() { return window.BuzzWake ? window.BuzzWake.mode() : (wakeApi() ? 'pending' : 'none'); }
+function keepAwake() { try { window.BuzzWake?.keepAwake(); } catch {} paintWake(); }
+function kickVideo() { try { window.BuzzWake?.kickVideo(); } catch {} }
+function startSleepVideo() { try { window.BuzzWake?.ensureVideo(); window.BuzzWake?.kickVideo(); } catch {} }
+let lastWakeMode = null, wakeReportT = 0;
+/* Report stay-awake state to the host roster (throttled): the host can see
+ * exactly which terminals are unprotected instead of discovering it mid-quiz. */
+function reportWake(force) {
+  if (!team || !socket.connected) return;
+  const m = wakeMode();
+  const now = Date.now();
+  if (!force && m === lastWakeMode && now - wakeReportT < 15000) return;
+  lastWakeMode = m; wakeReportT = now;
+  try { socket.emit('wake-status', { mode: m, releases: window.BuzzWake?.releases | 0 }); } catch {}
+}
+function paintWake() {
+  const el = $('wakePill');
+  const m = wakeMode();
+  if (el) {
+    if (m === 'lock' || m === 'video') { el.textContent = 'AWAKE'; el.style.color = 'var(--go)'; }
+    else if (m === 'none') { el.textContent = 'AT RISK'; el.style.color = 'var(--gold)'; }
+    else { el.textContent = '…'; el.style.color = ''; }
+  }
+  const hint = $('wakeHint');
+  if (hint) hint.style.display = (m === 'none' || m === 'pending') ? 'block' : 'none';
+  // Loud fallback: when neither layer holds, a full-width tap target. The tap
+  // itself is user activation, so it unblocks play() where timers cannot.
+  const bn = $('wakeBanner');
+  if (bn) bn.style.display = (m === 'none' || m === 'pending') ? 'block' : 'none';
+  reportWake(false);
+}
+try { window.BuzzWake?.onChange(() => paintWake()); } catch {}
+try {
+  const _wb = $('wakeBanner');
+  if (_wb) _wb.onclick = () => { keepAwake(); kickVideo(); setTimeout(paintWake, 600); };
+} catch {}
+setInterval(paintWake, 5000);
 function makeBuzzId() {
   try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch {}
   return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -115,7 +157,7 @@ document.addEventListener('visibilitychange', () => {
   reportFocus();
 });
 window.addEventListener('blur', () => { if (team && !lastAway) { lastAway = true; if (socket.connected) socket.emit('focus-status', { away: true }); } });
-window.addEventListener('focus', () => { if (team && lastAway) { lastAway = false; if (socket.connected) socket.emit('focus-status', { away: false }); } });
+window.addEventListener('focus', () => { keepAwake(); if (team && lastAway) { lastAway = false; if (socket.connected) socket.emit('focus-status', { away: false }); } });
 window.addEventListener('online', () => { try { socket.connect(); } catch {} if (team && roomCode) setTimeout(() => rejoin(true), 600); });
 window.addEventListener('offline', () => { $('connBar').classList.add('show'); $('connBar').textContent = 'OFFLINE — CHECK WIFI / DATA, RETRYING'; });
 $('joinBtn').addEventListener('click', () => keepAwake(), { once: true });
@@ -152,6 +194,7 @@ async function syncClock() {
 }
 socket.on('connect', () => {
   syncClock();
+  keepAwake();
   if ($('connBar').classList.contains('show') && navigator.onLine !== false) {
     $('connBar').classList.remove('show');
     $('connBar').textContent = 'CONNECTION LOST — RECONNECTING';
@@ -193,6 +236,7 @@ function rejoin(silent) {
     team = res.team; lastAway = false;
     try { localStorage.setItem('buzz-name', team.name); } catch {}
     applyTeam();
+    reportWake(true);
     if (res.state) {
       // restore own placement even mid-question (onRoomUpdate only does this on Q change)
       myBuzz = (res.state.buzzes || []).find((b) => b.teamId === team.id) || null;
@@ -205,6 +249,7 @@ function rejoin(silent) {
   });
 }
 $('joinBtn').onclick = () => {
+  keepAwake(); startSleepVideo(); // inside the tap gesture: both layers may claim here
   roomCode = $('roomInput').value.trim().toUpperCase();
   const teamName = $('nameInput').value.trim() || 'Team';
   if (roomCode.length < 4) return $('joinErr').textContent = 'Enter the 5-letter code from the host display.';
@@ -490,6 +535,18 @@ socket.on('control-event', (d) => {
   if (d?.action === 'reset') { hideCountdown(); myBuzz = null; pendingBuzz = null; paintState(); }
 });
 socket.on('kicked', (d) => { if (d.teamId === team?.id) { toast('Removed by host'); setTimeout(() => location.reload(), 1200); } });
+/* Host closed the room: drop out immediately — no auto-rejoin attempts. */
+socket.on('room-closed', (d) => {
+  if (d?.code && roomCode && d.code !== roomCode) return;
+  team = null; myBuzz = null; pendingBuzz = null; roomCode = null;
+  try { hideCountdown(); } catch {}
+  try { localStorage.removeItem('buzz-team-id'); } catch {}
+  try {
+    $('playView').style.display = 'none'; $('joinView').style.display = 'block';
+    $('joinErr').textContent = 'Host closed the room — ask the host for a new code.';
+  } catch {}
+  toast('Room closed by host');
+});
 
 function onRoomUpdate({ state }) {
   if (!state) return;
@@ -579,3 +636,6 @@ function renderMini(buzzes) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 ensureCountdownOverlay();
+keepAwake(); // hold the lock from the check-in screen, not just after join
+startSleepVideo(); // autoplay attempt (muted+inline); the Join tap guarantees it
+paintWake();

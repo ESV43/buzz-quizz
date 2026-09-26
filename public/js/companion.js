@@ -11,9 +11,12 @@ const socket = io({
   timeout: 15000,
 });
 const $ = (id) => document.getElementById(id);
-async function keepAwake() { try { await navigator.wakeLock?.request('screen'); } catch {} }
+/* Screen wake: shared hardened layer (WakeLock + looping video, see js/wake.js)
+ * so the quizmaster remote never sleeps mid-event, on https or plain-LAN http. */
+function keepAwake() { try { window.BuzzWake?.keepAwake(); } catch {} }
+keepAwake();
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') { keepAwake(); if (!socket.connected) try { socket.connect(); } catch {} }
+  if (document.visibilityState === 'visible' && !socket.connected) try { socket.connect(); } catch {}
 });
 window.addEventListener('online', () => { try { socket.connect(); } catch {} });
 function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2400); }
@@ -110,9 +113,28 @@ $('present').onclick = () => {
     try { navigator.vibrate?.(30); } catch {}
   });
 };
+// OBS overlay visibility — shared with the host deck so both labels stay in sync
+let overlayShown = true;
+function paintOverlay() {
+  const b = $('overlay');
+  if (b) b.textContent = overlayShown ? 'Overlay: on' : 'Overlay: off';
+}
+const _overlayBtn = $('overlay');
+if (_overlayBtn) _overlayBtn.onclick = () => {
+  const next = !overlayShown;
+  socket.emit('host-control', { action: 'overlay', on: next }, (r) => {
+    if (r && !r.ok) { toast(r.error || 'Blocked'); return; }
+    overlayShown = next; paintOverlay();
+    try { navigator.vibrate?.(30); } catch {}
+  });
+};
+paintOverlay();
 socket.on('control-event', (d) => {
   if (d?.action === 'present' && typeof d?.on === 'boolean') {
     projectorPresent = d.on; paintPresent();
+  }
+  if (d?.action === 'overlay' && typeof d?.on === 'boolean') {
+    overlayShown = d.on; paintOverlay();
   }
   if (d?.action === 'countdown') showCompCountdown(d.count || 3, d.questionNo);
   if (d?.action === 'arm') { clearCompCountdownGate(); toast(d?.via === 'countdown' ? 'Buzzers live' : 'Armed'); }
@@ -133,6 +155,13 @@ $('reset').onclick = (e) => {
 };
 $('bye').onclick = () => { try { sessionStorage.removeItem('buzz-companion'); } catch {} location.reload(); };
 socket.on('disconnect', () => toast('Connection lost — reconnecting'));
+/* Host closed the room: drop the remote back to the PIN screen. */
+socket.on('room-closed', () => {
+  try { sessionStorage.removeItem('buzz-companion'); } catch {}
+  try { if (typeof clearCompCountdownGate === 'function') clearCompCountdownGate(); } catch {}
+  showLocked('Host closed the room — ask the host for a new code.');
+  toast('Room closed by host');
+});
 socket.on('connect', () => {
   // socket.id changed — old companion grant is dead, reclaim it silently
   const c = creds();

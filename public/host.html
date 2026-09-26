@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>Host Console — Anvesha</title>
-<link rel="stylesheet" href="/css/arena.css?v=13"/>
+<link rel="stylesheet" href="/css/arena.css?v=15"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
@@ -29,6 +29,10 @@
     <div class="cell">
       <span class="k">Link</span>
       <span class="v" style="font-size:15px" id="connPill"><span class="livedot idle"></span>Offline</span>
+    </div>
+    <div class="cell opt">
+      <span class="k">Screen</span>
+      <span class="v mono" id="wakePillHost" style="font-size:15px">…</span>
     </div>
     <div class="cell hidenpresent hact"><button class="theme-toggle" data-theme-btn type="button">Light</button><a class="navlink" href="/">Lobby</a></div>
   </header>
@@ -58,8 +62,9 @@
         <div class="statesub" id="stateSub">Awaiting arm</div>
         <div class="qline"><span class="k">Question</span><span class="qn" id="qNum">–</span></div>
         <div class="qline"><span class="k">Room</span><span class="roomcode" id="roomCode">–––––</span></div>
+        <p class="note" id="wakeHintHost" style="display:none;margin:10px 0 0;border:1px solid #4d3f22;border-radius:8px;padding:8px 10px">Screen lock unavailable on this http:// link — keep this tab frontmost and set Display timeout to Never. Use an https:// link for a full lock.</p>
       </section>
-      <section class="panel">
+      <section class="panel deck">
         <div class="kicker">Control deck</div>
         <button class="btn go" id="armBtn" style="padding:17px">Arm buzzer</button>
         <div class="btnrow" style="margin-top:8px">
@@ -70,12 +75,16 @@
           <button class="btn warn" id="resetBtn">Reset</button>
           <button class="btn plain" id="presentBtn">Present</button>
         </div>
-        <div class="btnrow" style="margin-top:8px">
+        <div class="deck-utils" style="margin-top:8px">
           <button class="btn plain small" id="soundBtn">Sound on</button>
           <button class="btn plain small" id="voiceBtn">Voice on</button>
           <button class="btn plain small" id="fullBtn">Full</button>
+          <button class="btn plain small" id="overlayBtn">Overlay on</button>
         </div>
-        <p class="note" style="margin:12px 0 0"><span class="keys">Space</span> arm / lock &nbsp; <span class="keys">N</span> next &nbsp; <span class="keys">R</span> reset. Arming clears the previous standings.</p>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn warn small" id="endRoomBtn">End room</button>
+        </div>
+        <p class="note deck-hint" style="margin:12px 0 0"><span class="keys">Space</span> arm / lock &nbsp; <span class="keys">N</span> next &nbsp; <span class="keys">R</span> reset &nbsp; <span class="keys">O</span> overlay. Arming clears the previous standings.</p>
       </section>
       <section class="panel" id="joinPanel">
         <div class="kicker">Team entry <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
@@ -143,6 +152,7 @@
 <div class="toast" id="toast"></div>
 <canvas id="fx"></canvas>
 <script src="/js/theme.js?v=2"></script>
-<script src="/js/host.js?v=5"></script>
+<script src="/js/wake.js?v=2"></script>
+<script src="/js/host.js?v=9"></script>
 </body>
 </html>

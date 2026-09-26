@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
 <title>Buzzer — Anvesha</title>
-<link rel="stylesheet" href="/css/arena.css?v=13"/>
+<link rel="stylesheet" href="/css/arena.css?v=15"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
@@ -20,7 +20,7 @@
       <div class="brandline"><img class="brandlogo" src="/anvesha.jpeg?v=1" alt="Anvesha"/><span class="brandname">ANVESHA</span></div>
     </div>
     <div class="cell"><span class="k">Room</span><span class="v mono" id="roomTag" style="font-size:16px">— — —</span></div>
-    <div class="cell hidenpresent hact"><button class="theme-toggle" data-theme-btn type="button">Light</button><a class="navlink" href="/">Lobby</a></div>
+    <div class="cell hidenpresent hact"><button class="theme-toggle" data-theme-btn type="button">Light</button></div>
   </header>
 
   <div id="connBar">CONNECTION LOST — RECONNECTING</div>
@@ -37,7 +37,8 @@
     </div>
     <div class="btnrow" style="margin-top:16px"><button class="btn go" id="joinBtn">Join room</button></div>
     <p class="err" id="joinErr"></p>
-    <p class="note">Haptics and tone confirm every press. Display stays awake — keep this tab forward. The host is notified if you switch apps/tabs.</p>
+    <p class="note">Screen stays on automatically — keep this tab in front. On plain <b>http://</b> links the tablet uses its video fallback; the <b>https://</b> link from the host holds a full screen lock. Also set the tablet to never sleep while plugged in. The host sees your stay-awake dot.</p>
+    <p class="note" id="wakeHint" style="display:none;border:1px solid #4d3f22;border-radius:8px;padding:10px 12px">Stay-awake is still starting: keep this tab in front, use <b>Chrome</b> (Android) or <b>Safari</b> (iPhone) — not inside Instagram / WhatsApp — and prefer the <b>https://</b> host link. If the screen still sleeps, set the tablet Display timeout to Never.</p>
   </div>
 
   <div id="playView" style="display:none">
@@ -45,7 +46,9 @@
       <div class="cell"><span class="k">Question</span><span class="v mono" id="qPill" style="font-size:17px">–</span></div>
       <div class="cell"><span class="k">State</span><span class="v" id="stateTag" style="font-size:17px">Locked</span></div>
       <div class="cell"><span class="k">Sync</span><span class="v mono" id="netPill" style="font-size:17px">—</span></div>
+      <div class="cell"><span class="k">Screen</span><span class="v mono" id="wakePill" style="font-size:17px">…</span></div>
     </div>
+    <button id="wakeBanner" style="display:none;width:100%;margin-top:12px;padding:16px;border:1px solid #4d3f22;border-radius:10px;background:#1a1409;color:var(--gold);font-family:var(--fm);font-size:14px;letter-spacing:.1em;cursor:pointer">SCREEN MAY SLEEP — TAP HERE TO HOLD IT AWAKE</button>
 
     <div class="ident">
       <span class="chip" id="teamChip"></span>
@@ -81,6 +84,7 @@
 <div id="edgeFlash"></div>
 <div id="countOverlay"><div class="count-num" id="countNum">3</div><div class="count-sub" id="countSub">GET READY</div></div>
 <script src="/js/theme.js?v=2"></script>
-<script src="/js/play.js?v=4"></script>
+<script src="/js/wake.js?v=2"></script>
+<script src="/js/play.js?v=10"></script>
 </body>
 </html>

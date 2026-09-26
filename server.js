@@ -37,7 +37,14 @@ server.headersTimeout = 66000;
 const PORT = process.env.PORT || 3000;
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  // Phones cache aggressively: HTML must revalidate every load so terminals
+  // always boot the current JS (old cached pages silently miss fixes).
+  // Versioned assets (?v=) stay cache-friendly; socket.io path unaffected.
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // ---------- helpers ----------
@@ -180,6 +187,7 @@ function publicTeams(room) {
   return [...room.teams.values()].map((t) => ({
     id: t.id, name: t.name, color: t.color,
     connected: t.connected, away: !!t.away, rtt: t.rtt ?? null, offset: t.offset ?? null,
+    wake: t.wake?.mode || null, // lock | video | pending | none — stay-awake state
   }));
 }
 function publicState(room) {
@@ -384,6 +392,31 @@ io.on('connection', (socket) => {
     broadcastRoom(room);
   });
 
+  // ---- SPECTATOR: overlay / projector (OBS Browser Source) ----
+  // Read-only: joins the room channel, receives room-update / buzz-update /
+  // control-event, never appears in the roster and can never buzz or control.
+  socket.on('join-as-spectator', ({ code }, cb) => {
+    code = String(code || '').toUpperCase().trim();
+    const room = rooms.get(code);
+    if (!room) return cb?.({ ok: false, error: 'Room code not found. Check with the host.' });
+    socket.join(code);
+    socket.data.role = 'spectator';
+    socket.data.roomCode = code;
+    cb?.({ ok: true, state: publicState(room), teams: publicTeams(room) });
+  });
+
+  // ---- PLAYER: stay-awake report (host roster dot, not persisted) ----
+  socket.on('wake-status', ({ mode, releases }) => {
+    const room = rooms.get(socket.data.roomCode);
+    if (!room || socket.data.role !== 'player') return;
+    const team = room.teams.get(socket.data.teamId);
+    if (!team) return;
+    const m = ['lock', 'video', 'pending', 'none'].includes(mode) ? mode : 'pending';
+    if (team.wake?.mode === m) return; // releases count is diagnostic noise — don't rebroadcast
+    team.wake = { mode: m, releases: releases | 0, at: Date.now() };
+    broadcastRoom(room);
+  });
+
   socket.on('update-netstats', ({ offset, rtt }) => {
     const room = rooms.get(socket.data.roomCode);
     if (!room || socket.data.role !== 'player') return;
@@ -507,16 +540,16 @@ io.on('connection', (socket) => {
       room.state.buzzes = [];
       room.lastActivity = Date.now();
     }
-    // 'present' is display-only (projector on the host screen) — no room state,
-    // just relayed below so any controller can flip it.
+    // 'present' and 'overlay' are display-only (projector / OBS overlay flip) —
+    // no room state, just relayed below so any controller can flip them.
   }
 
   socket.on('host-control', ({ action, ...extra }, cb) => {
     const gate = requireControl();
     if (!gate.ok) return cb?.(gate);
     const room = gate.room;
-    if (socket.data.role === 'companion' && !['arm', 'lock', 'reset', 'next', 'clear', 'present'].includes(action)) {
-      return cb?.({ ok: false, error: 'Companions can only arm / lock / reset / present.' });
+    if (socket.data.role === 'companion' && !['arm', 'lock', 'reset', 'next', 'clear', 'present', 'overlay'].includes(action)) {
+      return cb?.({ ok: false, error: 'Companions can only arm / lock / reset / present / overlay.' });
     }
     if (action === 'next' || action === 'arm') {
       // Server-driven 3-2-1: bump Q, hold locked, tick, then auto-arm.
@@ -548,6 +581,32 @@ io.on('connection', (socket) => {
     cb?.({ ok: true });
     io.to(room.code).emit('kicked', { teamId });
     broadcastRoom(room);
+  });
+
+  // ---- HOST: close room — every terminal goes out immediately ----
+  // Host-only. Notifies the whole room first (players / companions /
+  // spectators all drop to their entry screens), then deletes the room so
+  // late rejoin attempts fail with "not found" instead of hanging.
+  socket.on('close-room', (_, cb) => {
+    const room = rooms.get(socket.data?.roomCode);
+    if (!room || socket.data.role !== 'host' || room.hostId !== socket.id) {
+      return cb?.({ ok: false, error: 'Host session expired (reconnect?) — reclaim the room and retry.' });
+    }
+    const code = room.code;
+    try { clearCountdown(room); } catch {}
+    try {
+      for (const [, t] of room.pendingDisconnect || []) clearTimeout(t);
+      room.pendingDisconnect?.clear?.();
+    } catch {}
+    try { io.to(code).emit('room-closed', { code, at: Date.now() }); } catch {}
+    try {
+      // Force every socket out of the room channel (v4 API; fall back harmlessly).
+      if (typeof io.in(code).socketsLeave === 'function') io.in(code).socketsLeave(code);
+    } catch {}
+    rooms.delete(code);
+    queueSave();
+    try { socket.data.roomCode = null; } catch {}
+    cb?.({ ok: true, code });
   });
 
   // ---- COMPANION: join with PIN, rate-limited ----

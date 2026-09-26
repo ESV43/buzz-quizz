@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>Remote — Anvesha</title>
-<link rel="stylesheet" href="/css/arena.css?v=13"/>
+<link rel="stylesheet" href="/css/arena.css?v=15"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
@@ -18,7 +18,7 @@
       <div class="brandline"><img class="brandlogo" src="/anvesha.jpeg?v=1" alt="Anvesha"/><span class="brandname">ANVESHA</span></div>
       <span class="k">Quizmaster</span>
     </div>
-    <div class="cell hact"><button class="theme-toggle" data-theme-btn type="button">Light</button><a class="navlink" href="/">Lobby</a></div>
+    <div class="cell hact"><button class="theme-toggle" data-theme-btn type="button">Light</button></div>
   </header>
 
   <div class="panel" id="lockCard" style="margin-top:26px">
@@ -48,7 +48,7 @@
         <button class="btn plain" id="lock">Lock</button>
         <button class="btn plain" id="next">Next</button>
       </div>
-      <div class="btnrow" style="margin-top:8px"><button class="btn plain" id="present">Projector: console</button></div>
+      <div class="btnrow" style="margin-top:8px"><button class="btn plain" id="present">Projector: console</button><button class="btn plain" id="overlay">Overlay: on</button></div>
       <div class="btnrow" style="margin-top:8px"><button class="btn warn" id="reset">Reset</button></div>
       <p class="note" style="margin:12px 0 0">Arming clears standings and opens a new question. Display stays awake while unlocked.</p>
       <div class="btnrow" style="margin-top:10px"><button class="btn plain small" id="bye">Disconnect</button></div>
@@ -59,6 +59,7 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="/js/theme.js?v=2"></script>
-<script src="/js/companion.js?v=4"></script>
+<script src="/js/wake.js?v=2"></script>
+<script src="/js/companion.js?v=7"></script>
 </body>
 </html>

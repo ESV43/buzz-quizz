@@ -16,9 +16,28 @@ let actx = null;
 
 if (new URLSearchParams(location.search).get('present') === '1') document.body.classList.add('present');
 
-async function keepAwake() { try { await navigator.wakeLock?.request('screen'); } catch {} }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+/* Screen wake: shared hardened layer (WakeLock + looping video, see js/wake.js).
+ * Holds BOTH layers at all times and reclaims every 8s + on every gesture, so
+ * the console survives on plain-LAN http (video) as well as https (WakeLock).
+ * OS sleep is separate — set the laptop/tablet to "never sleep when plugged
+ * in"; this covers the display. */
+function keepAwake() { try { window.BuzzWake?.keepAwake(); } catch {} }
+function hostWakeMode() { try { return window.BuzzWake?.mode() || 'pending'; } catch { return 'pending'; } }
+try { window.BuzzWake?.onChange(() => paintHostWake()); } catch {}
+function paintHostWake() {
+  const pill = document.getElementById('wakePillHost');
+  if (!pill) return;
+  const m = hostWakeMode();
+  if (m === 'lock' || m === 'video') { pill.textContent = 'Awake'; pill.style.color = 'var(--go)'; }
+  else if (m === 'none') { pill.textContent = 'At risk'; pill.style.color = 'var(--gold)'; }
+  else { pill.textContent = '…'; pill.style.color = ''; }
+  const hint = document.getElementById('wakeHintHost');
+  if (hint) hint.style.display = (m === 'none') ? 'block' : 'none';
+}
+setInterval(paintHostWake, 5000);
 keepAwake();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paintHostWake);
+else paintHostWake();
 
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2600); }
 function ac() {
@@ -216,6 +235,23 @@ $('fullBtn').onclick = () => {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => toast('Fullscreen blocked by browser'));
 };
+// OBS overlay (spectator browser source) visibility — shared like present so the
+// companion label stays in sync. Overlay pages default to visible; the host
+// hides them on non-quiz slides and shows them on quiz slides.
+let overlayShown = true;
+function paintOverlayBtn() {
+  const b = $('overlayBtn');
+  if (b) b.textContent = overlayShown ? 'Overlay on' : 'Overlay off';
+}
+function requestOverlay(on) {
+  overlayShown = !!on;
+  paintOverlayBtn();
+  toast(overlayShown ? 'Overlay shown on slides' : 'Overlay hidden from slides');
+  if (roomCode && socket.connected) socket.emit('host-control', { action: 'overlay', on: overlayShown }, () => {});
+}
+const _overlayBtn = $('overlayBtn');
+if (_overlayBtn) _overlayBtn.onclick = () => requestOverlay(!overlayShown);
+paintOverlayBtn();
 function setPresent(on) {
   document.body.classList.toggle('present', !!on);
   const b = $('presentBtn');
@@ -355,6 +391,43 @@ $('resetBtn').onclick = (e) => {
 };
 $('soundBtn').onclick = (e) => { soundOn = !soundOn; e.currentTarget.textContent = `Sound ${soundOn ? 'on' : 'off'}`; };
 $('voiceBtn').onclick = (e) => { voiceOn = !voiceOn; e.currentTarget.textContent = `Voice ${voiceOn ? 'on' : 'off'}`; };
+/* End room: two-tap confirm, then the server drops every terminal at once. */
+function exitToSetup(msg) {
+  roomCode = null;
+  try { localStorage.removeItem('buzz-host-code'); } catch {}
+  try {
+    document.body.classList.remove('present');
+    $('studio').style.display = 'none'; $('setup').style.display = 'block';
+  } catch {}
+  if (msg) toast(msg);
+}
+let endArmed = false, endT = null;
+const _endBtn = $('endRoomBtn');
+if (_endBtn) _endBtn.onclick = (e) => {
+  const b = e.currentTarget;
+  if (!endArmed) {
+    endArmed = true;
+    b.classList.add('confirm'); b.textContent = 'Confirm end?';
+    endT = setTimeout(() => { endArmed = false; b.classList.remove('confirm'); b.textContent = 'End room'; }, 3000);
+    return;
+  }
+  clearTimeout(endT);
+  endArmed = false; b.classList.remove('confirm'); b.textContent = 'End room';
+  if (!roomCode || !socket.connected) return toast('No active room');
+  b.disabled = true;
+  try {
+    socket.timeout(8000).emit('close-room', {}, (err, r) => {
+      b.disabled = false;
+      if (err || !r?.ok) return toast(r?.error || 'Close failed — retry');
+      exitToSetup(`Room ${r.code} closed — all terminals released`);
+    });
+  } catch { b.disabled = false; toast('Send failed — retry'); }
+};
+socket.on('room-closed', (d) => {
+  // Closed from another host tab — fall back to setup as well.
+  if (d?.code && roomCode && d.code !== roomCode) return;
+  exitToSetup('Room closed — all terminals released');
+});
 $('announceBtn').onclick = () => {
   if (currentWinner) { announceWinner(currentWinner.name); toast(`Announced: ${currentWinner.name}`); }
   else toast('No winner to announce yet');
@@ -366,6 +439,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'l' || e.key === 'L') control('lock');
   else if (e.key === 'n' || e.key === 'N') control('next');
   else if (e.key === 'r' || e.key === 'R') control('reset');
+  else if (e.key === 'o' || e.key === 'O') requestOverlay(!overlayShown);
 });
 
 /* coalesced rendering: N socket events per frame => one paint */
@@ -401,6 +475,10 @@ socket.on('control-event', (d) => {
   // projector flip from the companion remote (own echo is a no-op — no double toast)
   if (d?.action === 'present' && typeof d?.on === 'boolean') {
     if (document.body.classList.contains('present') !== d.on) setPresent(d.on);
+  }
+  // overlay visibility flip from companion (own echo is a no-op)
+  if (d?.action === 'overlay' && typeof d?.on === 'boolean') {
+    if (overlayShown !== d.on) { overlayShown = d.on; paintOverlayBtn(); }
   }
 });
 socket.on('security-alert', (d) => { $('secLog').innerHTML += `<div>Security — ${escapeHtml(d.msg)} <span class="mono">${new Date().toLocaleTimeString()}</span></div>`; });
@@ -480,11 +558,19 @@ function renderRoster(teams, buzzes = []) {
     let el = rosEls.get(t.id);
     if (!el) { el = document.createElement('div'); rosEls.set(t.id, el); box.appendChild(el); }
     const status = !t.connected ? 'OUT' : (t.away ? 'AWAY' : 'IN');
+    // Stay-awake dot: green = protected, gold = screen may sleep, grey =
+    // unknown (old page still cached on the terminal — ask them to reload).
+    const wcls = t.wake === 'lock' || t.wake === 'video' ? 'on' : (t.wake === 'none' ? 'off' : 'na');
+    const wtitle = t.wake === 'lock' ? 'Stay-awake: screen lock held'
+      : t.wake === 'video' ? 'Stay-awake: video fallback playing'
+      : t.wake === 'none' ? 'No stay-awake — this screen may sleep'
+      : t.wake === 'pending' ? 'Stay-awake acquiring…'
+      : 'Stay-awake unknown — terminal runs an old page, ask them to reload';
     const html = `<span class="bar"></span><span class="nm">${escapeHtml(t.name)}</span>`
       + `${bz && bz.rank <= 3 ? `<span class="pos">P${bz.rank}</span>` : ''}`
       + `${bz && bz.rank > 3 ? `<span class="mg">+${bz.deltaMs}</span>` : ''}`
       + `${t.away && t.connected ? '<span class="away">TAB</span>' : ''}`
-      + `<span class="st ${t.connected && !t.away ? 'in' : (t.away ? 'away' : '')}">${status} · ${t.rtt ?? '–'}</span>`
+      + `<span class="st ${t.connected && !t.away ? 'in' : (t.away ? 'away' : '')}">${status} · ${t.rtt ?? '–'}<span class="wdot ${wcls}" title="${wtitle}"></span></span>`
       + `<button class="rm" data-kick="${t.id}" title="Remove team">×</button>`;
     if (rosHtml.get(t.id) !== html) {
       rosHtml.set(t.id, html);
