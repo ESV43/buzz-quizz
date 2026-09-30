@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <script src="/socket.io/socket.io.js"></script>
+<script>if (!window.io) document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');</script>
+<script src="/js/lan.js?v=1"></script>
 <meta name="theme-color" content="#0a0c0e"/>
 </head>
 <body>
@@ -41,6 +43,7 @@
     <div class="kicker">Session setup</div>
     <h2 class="ptitle">Open a room</h2>
     <p class="sub">This machine is the timing host. Teams join by code or QR. 8–20 buzzers.</p>
+    <p class="note" id="lanSetupNote" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px">For zero delay, run this page from the event laptop (<span class="mono">npm start</span>, open the <b>http://192.168.…</b> LAN address) — not the Vercel URL. Same Wi-Fi + room code = packets never leave the room. <a href="/lan.html">LAN mode guide</a></p>
     <div class="guide">
       <div class="gstep"><b>01</b><span>Create the room — <b>code + QR</b> appear in the side rail</span></div>
       <div class="gstep"><b>02</b><span>Teams check in on their terminals, then <b>Arm</b> each question</span></div>
@@ -87,17 +90,23 @@
         <p class="note deck-hint" style="margin:12px 0 0"><span class="keys">Space</span> arm / lock &nbsp; <span class="keys">N</span> next &nbsp; <span class="keys">R</span> reset &nbsp; <span class="keys">O</span> overlay. Arming clears the previous standings.</p>
       </section>
       <section class="panel" id="joinPanel">
-        <div class="kicker">Team entry <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
+        <div class="kicker">Team entry · <span id="lanBadge" class="mono" style="color:var(--go)">LAN — zero delay</span> <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
         <div id="joinSecrets">
           <div class="qrrow">
             <img id="qr" alt="Join QR code"/>
             <div>
-              <div class="note">Scan to open the buzzer, or type the address.</div>
+              <div class="note" id="qrCaption">Scan to open the buzzer, or type the address. LAN link is fastest — same Wi-Fi, no internet.</div>
               <div class="joinlist" style="margin-top:8px"><span class="prime" id="joinLink">—</span></div>
+              <div class="btnrow" style="margin-top:8px"><button class="btn plain small" id="copyLanBtn" type="button">Copy LAN link</button><button class="btn plain small" id="openLanGuide" type="button">LAN guide</button></div>
             </div>
           </div>
           <div class="joinlist" id="joinUrls" style="margin-top:10px"></div>
           <p class="note" id="netHint" style="margin:8px 0 0"></p>
+          <div id="internetBlock" style="display:none;margin-top:12px;border-top:1px solid var(--line-soft);padding-top:10px">
+            <div class="kicker">Internet fallback · slower</div>
+            <div class="joinlist"><span class="prime" id="internetLink">—</span></div>
+            <div class="btnrow" style="margin-top:8px"><button class="btn plain small" id="copyNetBtn" type="button">Copy internet link</button></div>
+          </div>
         </div>
         <p class="note masked-note" id="joinMaskedNote" style="display:none">Codes hidden from projector. Press Show to reveal.</p>
       </section>

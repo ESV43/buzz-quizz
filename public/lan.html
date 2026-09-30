@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>LAN Mode — Anvesha</title>
+<link rel="stylesheet" href="/css/arena.css?v=17"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<meta name="theme-color" content="#0a0c0e"/>
+</head>
+<body>
+<div class="wrap" style="max-width:640px">
+  <header class="strip">
+    <div class="cell">
+      <div class="brandline"><img class="brandlogo" src="/anvesha.jpeg?v=1" alt="Anvesha"/><span class="brandname">ANVESHA</span></div>
+      <span class="k">LAN mode · zero delay</span>
+    </div>
+    <div class="cell hact"><button class="theme-toggle" data-theme-btn type="button">Light</button><a class="navlink" href="/">Lobby</a></div>
+  </header>
+
+  <div class="kicker">Same Wi-Fi · room code · no internet</div>
+  <h1 class="title">LAN mode.<br/><span class="thin">Buzzer packets stay in the room.</span></h1>
+  <p class="sub">The Vercel link sends every press over the internet (delay + jitter). In LAN mode the event laptop runs <span class="mono">npm start</span> and every terminal talks to it directly over event Wi-Fi — typically single-digit milliseconds. Join with the <b>room code</b> plus the <b>host LAN address</b>.</p>
+
+  <div class="panel" style="margin-top:18px">
+    <div class="kicker">Join a LAN room</div>
+    <div class="field"><label>Host LAN address</label>
+      <input id="lanHost" placeholder="192.168.1.20:3000" autocomplete="off" inputmode="url"/>
+    </div>
+    <div class="field"><label>Room code</label>
+      <input id="lanRoom" class="code" placeholder="·····" maxlength="5" autocomplete="off"/>
+    </div>
+    <p class="err" id="lanErr"></p>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn plain" id="lanTest" type="button">Test host</button>
+      <button class="btn go" id="lanBuzz" type="button">Join buzzer</button>
+    </div>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="btn plain small" id="lanRemote" type="button">Quizmaster remote</button>
+      <button class="btn plain small" id="lanOverlay" type="button">Slides overlay</button>
+    </div>
+    <p class="note" id="lanStatus" style="margin:10px 0 0"></p>
+    <p class="note" id="selfInfo" style="margin:6px 0 0"></p>
+  </div>
+
+  <div class="panel" style="margin-top:14px">
+    <div class="kicker">Event-day setup · 3 steps</div>
+    <div class="guide">
+      <div class="gstep"><b>01</b><span>Host laptop joins event Wi-Fi, runs <span class="keys">npm start</span> — note the <b>LAN line</b>, e.g. <span class="mono">http://192.168.1.20:3000</span></span></div>
+      <div class="gstep"><b>02</b><span>Open that LAN address on the laptop (<span class="mono">/host.html</span>), <b>Create room</b> — QR + code are LAN links</span></div>
+      <div class="gstep"><b>03</b><span>Teams join the same Wi-Fi, enter the <b>IP + room code</b> above (or scan the host QR). No mobile data needed.</span></div>
+    </div>
+    <p class="note" style="margin:10px 0 0">Why a redirect? An <b>https://</b> internet page is blocked by browsers from talking to a <b>http://</b> LAN host. So LAN mode navigates you onto the LAN address first — after that, everything (socket, sync, buzz) is LAN-local. If you are already on the LAN address, just join with the code.</p>
+    <div class="btnrow" style="margin-top:10px"><button class="btn plain small" id="openHost" type="button">Open host console</button><button class="btn plain small" id="backLobby" type="button">Back to lobby</button></div>
+  </div>
+
+  <footer>ANVESHA · LAN mode</footer>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/js/lan.js?v=1"></script>
+<script src="/js/theme.js?v=2"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var L = window.BuzzLan;
+  function toast(m) { var t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, 2400); }
+  var q = new URLSearchParams(location.search);
+  try {
+    var preRoom = (q.get('room') || localStorage.getItem('buzz-room') || '').toUpperCase();
+    if (preRoom) $('lanRoom').value = preRoom;
+    var preSrv = L ? (L.normalizeServer(q.get('server') || L.getSavedServer() || '') || '') : '';
+    if (preSrv) $('lanHost').value = preSrv.replace(/^https?:\/\//, '');
+  } catch {}
+  // If this guide itself is served from the LAN server, pre-fill its own host.
+  try {
+    var sameHttp = location.protocol === 'http:' && !/^(localhost|127\.)/.test(location.hostname);
+    if (sameHttp && !$('lanHost').value) $('lanHost').value = location.host;
+    $('selfInfo').textContent = sameHttp
+      ? 'You are already on the LAN server (' + location.host + ') — entering just the room code below keeps you here.'
+      : 'You are on the internet page. Entering the host + code below hops you onto the LAN server.';
+  } catch {}
+  function creds() {
+    var host = L ? L.normalizeServer($('lanHost').value) : null;
+    var room = ($('lanRoom').value || '').trim().toUpperCase();
+    if (!host) { $('lanErr').textContent = 'Enter the host LAN address, e.g. 192.168.1.20:3000 (shown on the host screen).'; return null; }
+    if (!/^[A-Z0-9]{4,6}$/.test(room)) { $('lanErr').textContent = 'Enter the room code from the host display.'; return null; }
+    $('lanErr').textContent = '';
+    return { host: host, room: room };
+  }
+  $('lanTest').onclick = async function () {
+    if (!L) return;
+    var host = L.normalizeServer($('lanHost').value);
+    if (!host) { $('lanErr').textContent = 'Enter the host LAN address first.'; return; }
+    $('lanErr').textContent = '';
+    $('lanStatus').textContent = 'Probing ' + host + ' …';
+    $('lanTest').disabled = true;
+    var r = await L.testServer(host, 3000);
+    $('lanTest').disabled = false;
+    if (r.ok) { $('lanStatus').textContent = 'Host reachable — ' + r.ms + ' ms. Pick Join buzzer / remote / overlay below.'; L.setSavedServer(host); L.setSavedMode('lan'); }
+    else $('lanStatus').textContent = r.error || 'Unreachable — same Wi-Fi? Server running (npm start)?';
+  };
+  function go(page) {
+    var c = creds();
+    if (!c || !L) return;
+    L.setSavedServer(c.host); L.setSavedMode('lan');
+    try { localStorage.setItem('buzz-room', c.room); } catch {}
+    L.goLan(c.host, page, c.room);
+  }
+  $('lanBuzz').onclick = function () { go('play.html'); };
+  $('lanRemote').onclick = function () { go('companion.html'); };
+  $('lanOverlay').onclick = function () { go('overlay.html'); };
+  $('openHost').onclick = function () {
+    if (!L) { location.href = '/host.html'; return; }
+    var host = L.normalizeServer($('lanHost').value);
+    if (host && !L.isSameOrigin(host)) L.goLan(host, 'host.html');
+    else location.href = '/host.html';
+  };
+  $('backLobby').onclick = function () { location.href = '/'; };
+})();
+</script>
+</body>
+</html>

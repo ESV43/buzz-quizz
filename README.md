@@ -43,6 +43,35 @@ Free services sleep after 15 min without traffic (first load takes ~1 min),
 so open the host page 10 min before the event. During the quiz the 10 s
 host probe plus player sync traffic keeps it awake.
 
+## LAN mode — zero delay (use this on event day)
+
+The Vercel link sends every press over the internet (delay + jitter). LAN mode
+keeps every buzzer packet on event Wi-Fi: the laptop runs the timing server,
+terminals join by **room code + host LAN address**.
+
+```bash
+npm start
+# note the LAN line, e.g.  LAN (zero-delay): http://192.168.1.20:3000
+```
+
+1. On the laptop open the **LAN address** `/host.html` (not the Vercel URL) →
+   Create room. The main QR is the LAN link; the internet `https://` link is
+   shown separately as a slower fallback.
+2. Phones/tablets join the same Wi-Fi, then either scan the LAN QR or open
+   `/lan.html`, enter the host address (`192.168.1.20:3000`) + room code →
+   Join buzzer / remote / overlay.
+3. The player and companion pages have an **Internet | LAN** switch: enter the
+   host once (saved), Test it, then Join. If you open the Vercel `https://`
+   page with a LAN host set, browsers block the socket (mixed content) — the
+   page shows a one-tap **Open LAN version** button that hops you onto
+   `http://<lan-ip>:3000/play.html?room=XXXXX`. After that hop everything is
+   LAN-local.
+
+Discovery: `GET /api/info` returns `{ lanIps, lanUrls, port }`.
+`create-room` / `host-rejoin` now return split links: `lanUrl` + `lanJoinUrls`
++ `lanQr` (fast path) alongside `internetUrl` (fallback), plus `lanIps`/`port`.
+`?server=<host>:<port>` on any page pre-fills the LAN host.
+
 ## Deploy (Vercel — static only, NOT for the timing server)
 
 Push this folder to the repo connected to Vercel and redeploy — no extra config.

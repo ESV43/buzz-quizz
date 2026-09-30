@@ -1,5 +1,5 @@
 /* Host console — broadcast layout render layer. Hardened link + 3-2-1 countdown. */
-const socket = io({
+const SOCKET_OPTS = {
   transports: ['polling', 'websocket'],
   upgrade: true,
   rememberUpgrade: true,
@@ -9,7 +9,24 @@ const socket = io({
   reconnectionDelayMax: 5000,
   randomizationFactor: 0.5,
   timeout: 15000,
-});
+};
+/* LAN mode: ?server=<lan-ip>:<port> lets this console drive a LAN timing
+ * server even when the page itself was opened elsewhere (https backends only;
+ * https->http is browser-blocked, so the guide redirects onto the LAN URL). */
+let socket = io(SOCKET_OPTS);
+try {
+  if (window.BuzzLan) {
+    const srv = window.BuzzLan.activeServer();
+    if (srv && !window.BuzzLan.isSameOrigin(srv)) {
+      if (window.BuzzLan.isBlockedByMixedContent(srv)) {
+        setTimeout(() => toast('LAN host set but this is an internet page — open the LAN URL for zero delay (/lan.html)'), 1200);
+      } else {
+        try { socket.disconnect(); } catch {}
+        socket = io(srv, SOCKET_OPTS);
+      }
+    }
+  }
+} catch { if (!socket) socket = io(SOCKET_OPTS); }
 const $ = (id) => document.getElementById(id);
 let roomCode = null, soundOn = true, voiceOn = true, lastWinnerId = null;
 let actx = null;
@@ -196,13 +213,39 @@ $('rejoinBtn').onclick = () => {
     enterStudio(res.code || code, res); toast('Host session reclaimed');
   });
 };
+function shortHost(u) {
+  try {
+    const p = new URL(u);
+    return p.host + p.pathname + '?room=' + roomCode;
+  } catch { return u; }
+}
 function paintJoinSecrets(code, res) {
-  if (res?.qr) $('qr').src = res.qr;
-  if (res?.joinUrls?.length) {
+  // LAN-first: the main QR + prime link are always the zero-delay LAN URL.
+  // Internet (https) is shown separately as a slower fallback, if present.
+  const lanUrl = res?.lanUrl || res?.lanJoinUrls?.[0] || null;
+  const netUrl = res?.internetUrl || null;
+  const mainQr = res?.lanQr || res?.qr || null;
+  if (mainQr) $('qr').src = mainQr;
+  else if (res?.qr) $('qr').src = res.qr;
+  if (lanUrl) {
+    $('joinLink').textContent = shortHost(lanUrl);
+    $('joinLink').dataset.full = lanUrl;
+    const extra = (res?.lanJoinUrls || []).slice(1, 3);
+    $('joinUrls').innerHTML = extra.map((u) => `<div>${escapeHtml(u)}</div>`).join('');
+    const badge = $('lanBadge');
+    if (badge) badge.textContent = 'LAN — zero delay';
+    const cap = $('qrCaption');
+    if (cap) cap.textContent = 'Scan to open the buzzer on event Wi-Fi. Same-network packets only — no internet delay.';
+    $('netHint').textContent = netUrl
+      ? `LAN is live (${(res?.lanIps || []).join(', ') || 'local IP'}). Internet fallback below works over mobile data but adds delay.`
+      : `LAN-only room on ${(res?.lanIps || []).join(', ') || 'this machine'}. Everyone must join the same Wi-Fi.`;
+  } else if (res?.joinUrls?.length) {
+    // legacy server response fallback
     try {
       const u = new URL(res.joinUrls[0]);
       $('joinLink').textContent = u.host + u.pathname + '?room=' + code;
-    } catch { $('joinLink').textContent = res.joinUrls[0]; }
+      $('joinLink').dataset.full = res.joinUrls[0];
+    } catch { $('joinLink').textContent = res.joinUrls[0]; $('joinLink').dataset.full = res.joinUrls[0]; }
     $('joinUrls').innerHTML = res.joinUrls.slice(1, 4).map((u) => `<div>${escapeHtml(u)}</div>`).join('');
     const first = res.joinUrls[0] || '';
     const internet = /^https:\/\//.test(first) && !/localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(first);
@@ -210,6 +253,12 @@ function paintJoinSecrets(code, res) {
       ? 'Internet link — works over mobile data, not just same Wi-Fi.'
       : 'Same-Wi-Fi link (local IP). Deploy with PUBLIC_URL for internet play.';
   }
+  const ib = $('internetBlock');
+  if (netUrl && ib) {
+    ib.style.display = 'block';
+    $('internetLink').textContent = netUrl;
+    $('internetLink').dataset.full = netUrl;
+  } else if (ib) ib.style.display = 'none';
   if (res?.companionUrl) {
     $('companionHint').textContent = res.companionUrl.replace(/^https?:\/\//, '');
     $('companionLink').textContent = res.companionUrl.replace(/^https?:\/\//, '');
@@ -229,6 +278,35 @@ function enterStudio(code, res) {
   if (res?.state) renderAll(res);
 }
 try { const saved = localStorage.getItem('buzz-host-code'); if (saved) $('rejoinCode').value = saved; } catch {}
+
+/* LAN-mode helpers: copy links, open guide. */
+function copyText(t, okMsg) {
+  const done = () => toast(okMsg || 'Copied');
+  try {
+    if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(t).then(done, () => toast('Copy failed — long-press to copy')); return; }
+  } catch {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove(); done();
+  } catch { toast('Copy failed — long-press to copy'); }
+}
+try {
+  const _cl = $('copyLanBtn');
+  if (_cl) _cl.onclick = () => {
+    const full = $('joinLink')?.dataset?.full || $('joinLink')?.textContent || '';
+    if (!full || full === '—') return toast('Create a room first');
+    copyText(full, 'LAN link copied — share on event Wi-Fi');
+  };
+  const _cn = $('copyNetBtn');
+  if (_cn) _cn.onclick = () => {
+    const full = $('internetLink')?.dataset?.full || $('internetLink')?.textContent || '';
+    if (!full || full === '—') return toast('No internet link for this room');
+    copyText(full, 'Internet link copied');
+  };
+  const _lg = $('openLanGuide');
+  if (_lg) _lg.onclick = () => { location.href = '/lan.html' + (roomCode ? '?room=' + encodeURIComponent(roomCode) : ''); };
+} catch {}
 
 $('revealPin').onclick = () => $('compPin').classList.toggle('open');
 $('fullBtn').onclick = () => {

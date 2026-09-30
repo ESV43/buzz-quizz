@@ -18,7 +18,33 @@
   let roomCode = (qs.get('room') || '').toUpperCase().trim();
   let lastState = null;
 
-  const socket = io({
+  // LAN mode: ?server=<lan-ip>:<port> points the overlay at the event laptop.
+  // (OBS machine is usually on the same LAN — open the http LAN URL directly
+  // for zero delay; https page -> http host is browser-blocked, so navigate.)
+  let _srv = '';
+  try {
+    _srv = (window.BuzzLan?.activeServer() || '').trim();
+    if (_srv && window.BuzzLan.isBlockedByMixedContent(_srv)) {
+      // Can't socket across — rewrite the OBS URL hint and stay same-origin.
+      var _go = window.BuzzLan.buildLanUrl(_srv, 'overlay.html', roomCode || undefined, {
+        style: document.body.dataset.style, top: String(topN),
+      });
+      if (_go) {
+        var _p = document.querySelector('#setup p');
+        if (_p) _p.innerHTML = 'LAN room detected. For zero delay, use this URL as the OBS Browser Source instead:<br/><span style="font-family:monospace;word-break:break-all">' + _go.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>';
+      }
+      _srv = '';
+    } else if (_srv && window.BuzzLan.isSameOrigin(_srv)) _srv = '';
+  } catch { _srv = ''; }
+  const socket = _srv ? io(_srv, {
+    transports: ['polling', 'websocket'],
+    upgrade: true,
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 5000,
+    timeout: 15000,
+  }) : io({
     transports: ['polling', 'websocket'],
     upgrade: true,
     reconnection: true,

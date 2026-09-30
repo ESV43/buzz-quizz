@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <script src="/socket.io/socket.io.js"></script>
+<script>if (!window.io) document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');</script>
+<script src="/js/lan.js?v=1"></script>
 <meta name="theme-color" content="#0a0c0e"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 </head>
@@ -29,6 +31,29 @@
     <div class="kicker">Check in</div>
     <h2 class="ptitle">Join the round</h2>
     <p class="sub">Room code is on the host display. One terminal per team of two.</p>
+    <div id="lanRedirectBar" style="display:none;border:1px solid #4d3f22;border-radius:8px;padding:12px 14px;margin-bottom:14px;background:#1a1409">
+      <div class="kicker" style="margin-bottom:6px">LAN mode available — zero delay</div>
+      <p class="note" id="lanRedirectText" style="margin:0 0 10px">This internet page cannot reach the event-Wi-Fi host directly. Open the LAN version so buzzer packets never leave the room.</p>
+      <div class="btnrow"><button class="btn go" id="lanRedirectBtn" type="button">Open LAN version</button></div>
+    </div>
+    <div style="border:1px solid var(--line-soft);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div class="kicker" style="margin-bottom:8px">Connection · <span id="lanModeTag" class="mono">Internet</span></div>
+      <div class="btnrow">
+        <button class="btn plain small" id="modeInternet" type="button">Internet</button>
+        <button class="btn plain small" id="modeLan" type="button">LAN · zero delay</button>
+      </div>
+      <div id="lanFields" style="display:none;margin-top:10px">
+        <div class="field"><label>Host LAN address</label>
+          <input id="lanServerInput" placeholder="192.168.1.20:3000" autocomplete="off" inputmode="url"/>
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn plain small" id="lanTestBtn" type="button">Test</button>
+          <button class="btn plain small" id="lanOpenBtn" type="button">Open LAN version</button>
+        </div>
+        <p class="note" id="lanStatus" style="margin:8px 0 0"></p>
+        <p class="note" style="margin:6px 0 0">Same Wi-Fi as the host laptop. The IP is on the host screen (room code joins the room on that host).</p>
+      </div>
+    </div>
     <div class="field"><label>Room code</label>
       <input id="roomInput" class="code" placeholder="·····" maxlength="5" autocomplete="off"/>
     </div>

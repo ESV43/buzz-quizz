@@ -1,5 +1,5 @@
 /* Quizmaster remote — hardened link + 3-2-1 countdown */
-const socket = io({
+const SOCKET_OPTS = {
   transports: ['polling', 'websocket'],
   upgrade: true,
   rememberUpgrade: true,
@@ -9,7 +9,17 @@ const socket = io({
   reconnectionDelayMax: 5000,
   randomizationFactor: 0.5,
   timeout: 15000,
-});
+};
+let socket = null;
+let compLanServer = '';
+try {
+  const L = window.BuzzLan;
+  compLanServer = L ? (L.activeServer() || '') : '';
+  if (compLanServer && L.isSameOrigin(compLanServer)) compLanServer = '';
+  socket = (!compLanServer || L.isBlockedByMixedContent(compLanServer))
+    ? io(SOCKET_OPTS)
+    : io(compLanServer, SOCKET_OPTS);
+} catch { socket = io(SOCKET_OPTS); }
 const $ = (id) => document.getElementById(id);
 /* Screen wake: shared hardened layer (WakeLock + looping video, see js/wake.js)
  * so the quizmaster remote never sleeps mid-event, on https or plain-LAN http. */
@@ -27,6 +37,69 @@ try {
 } catch {}
 let unlocked = false, awayTeams = new Map();
 let compCountdown = null, compCountdownTimer = null;
+/* ---------- LAN mode (same room-code + LAN-host method as players) ---------- */
+let compLanMode = 'internet';
+try {
+  const _L = window.BuzzLan;
+  if (_L) {
+    const _s = _L.normalizeServer(_L.getSavedServer() || compLanServer || new URLSearchParams(location.search).get('server') || '');
+    if (_s && _s.indexOf('http://') === 0) compLanMode = 'lan';
+    else if ((_L.getSavedMode() || '') === 'lan' && _s) compLanMode = 'lan';
+  }
+} catch {}
+function paintCompLan() {
+  try {
+    const L = window.BuzzLan;
+    if (!L) return;
+    $('compLanTag').textContent = compLanMode === 'lan' ? 'LAN · zero delay' : 'Internet';
+    $('compLanFields').style.display = compLanMode === 'lan' ? 'block' : 'none';
+    $('compModeInternet')?.classList.toggle('go', compLanMode !== 'lan');
+    $('compModeLan')?.classList.toggle('go', compLanMode === 'lan');
+    const srv = L.normalizeServer($('compLanInput')?.value || compLanServer || L.getSavedServer() || '');
+    const blocked = !!(srv && L.isBlockedByMixedContent(srv) && !L.isSameOrigin(srv));
+    $('compLanRedirect').style.display = blocked ? 'block' : 'none';
+    const go = $('compLanGo');
+    if (go && blocked) {
+      go.onclick = () => {
+        const room = ($('code')?.value || '').toUpperCase().trim();
+        L.setSavedServer(srv); L.setSavedMode('lan');
+        L.goLan(srv, 'companion.html', room || undefined);
+      };
+    }
+  } catch {}
+}
+function initCompLan() {
+  try {
+    const L = window.BuzzLan;
+    if (!L) return;
+    const q = new URLSearchParams(location.search).get('server');
+    const pre = L.normalizeServer(q || L.getSavedServer() || compLanServer || '') || '';
+    if (pre) { $('compLanInput').value = pre.replace(/^https?:\/\//, ''); if (pre.indexOf('http://') === 0) compLanMode = 'lan'; }
+    $('compModeInternet').onclick = () => { compLanMode = 'internet'; L.setSavedMode('internet'); paintCompLan(); };
+    $('compModeLan').onclick = () => { compLanMode = 'lan'; L.setSavedMode('lan'); paintCompLan(); try { $('compLanInput')?.focus(); } catch {} };
+    $('compLanTest').onclick = async () => {
+      const srv = L.normalizeServer($('compLanInput')?.value || '');
+      if (!srv) { $('compLanStatus').textContent = 'Enter the host address first.'; return; }
+      $('compLanStatus').textContent = 'Probing ' + srv + ' …';
+      const r = await L.testServer(srv, 3000);
+      $('compLanStatus').textContent = r.ok ? `Host reachable — ${r.ms} ms. Tap “Open LAN version”.` : (r.error || 'Unreachable.');
+      if (r.ok) { L.setSavedServer(srv); compLanServer = srv; }
+      paintCompLan();
+    };
+    $('compLanOpen').onclick = () => {
+      const srv = L.normalizeServer($('compLanInput')?.value || '');
+      if (!srv) { $('compLanStatus').textContent = 'Enter the host address first.'; return; }
+      L.setSavedServer(srv); L.setSavedMode('lan');
+      L.goLan(srv, 'companion.html', ($('code')?.value || '').toUpperCase().trim() || undefined);
+    };
+    $('compLanInput')?.addEventListener('input', paintCompLan);
+    paintCompLan();
+  } catch {}
+}
+try {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCompLan);
+  else initCompLan();
+} catch {}
 function creds() { try { return JSON.parse(sessionStorage.getItem('buzz-companion') || 'null'); } catch { return null; } }
 function showRemote(state, teams) {
   unlocked = true;
@@ -51,11 +124,28 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&a
 $('unlock').onclick = () => {
   const code = $('code').value.trim().toUpperCase(), pin = $('pin').value.trim();
   if (!code || !pin) return $('err').textContent = 'Enter both the room code and the PIN.';
+  try {
+    const L = window.BuzzLan;
+    if (L && compLanMode === 'lan') {
+      const srv = L.normalizeServer($('compLanInput')?.value || compLanServer || L.getSavedServer() || '');
+      if (!srv) { $('err').textContent = 'LAN mode: enter the host address first.'; return; }
+      L.setSavedServer(srv); L.setSavedMode('lan');
+      if (!L.isSameOrigin(srv)) { L.goLan(srv, 'companion.html', code); return; }
+    }
+  } catch {}
   if (!socket.connected) try { socket.connect(); } catch {}
   $('unlock').disabled = true;
   socket.timeout(8000).emit('join-as-companion', { code, pin }, (err, res) => {
     $('unlock').disabled = false;
-    if (err) { $('err').textContent = 'Slow link — retry unlock.'; return; }
+    if (err) {
+      try {
+        if (window.BuzzLan?.isHttpsPage() && /vercel|netlify/i.test(location.host)) {
+          $('err').textContent = 'This internet page has no timing server. Switch to LAN above, enter the host IP, then “Open LAN version”.';
+          compLanMode = 'lan'; paintCompLan(); return;
+        }
+      } catch {}
+      $('err').textContent = 'Slow link — retry unlock.'; return;
+    }
     if (!res?.ok) { $('err').textContent = res?.error || 'Denied'; return; }
     try { sessionStorage.setItem('buzz-companion', JSON.stringify({ code, pin })); } catch {}
     showRemote(res.state, res.teams); toast('Remote unlocked');

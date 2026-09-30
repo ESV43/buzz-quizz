@@ -1,5 +1,5 @@
 /* Team terminal — hardened connect + retryable buzz + 3-2-1 countdown. */
-const socket = io({
+const SOCKET_OPTS = {
   // polling-first connects instantly behind mobile middleboxes / captive
   // portals; websocket-first was hanging ~9s before fallback ("huge buffering").
   transports: ['polling', 'websocket'],
@@ -11,7 +11,25 @@ const socket = io({
   reconnectionDelayMax: 5000,
   randomizationFactor: 0.5,
   timeout: 15000,
-});
+};
+/* LAN mode: the timing server is http://<lan-ip>:3000 on event Wi-Fi.
+ * ?server= pre-fills it; saved host persists. https page -> http host cannot
+ * socket directly (mixed content), so we redirect onto the LAN URL instead —
+ * after that every buzz packet stays on the LAN. */
+let socket = null;
+let lanServer = '';
+try {
+  const L = window.BuzzLan;
+  lanServer = L ? (L.activeServer() || '') : '';
+  if (lanServer && L.isSameOrigin(lanServer)) lanServer = '';
+  if (lanServer && L.isBlockedByMixedContent(lanServer)) {
+    socket = io(SOCKET_OPTS); // placeholder; redirect bar guides onto LAN
+  } else if (lanServer) {
+    socket = io(lanServer, SOCKET_OPTS);
+  } else {
+    socket = io(SOCKET_OPTS);
+  }
+} catch { socket = io(SOCKET_OPTS); }
 const $ = (id) => document.getElementById(id);
 let team = null, roomCode = null, clockOffset = 0, rtt = 0;
 let armed = false, questionNo = 0, myBuzz = null, buzzLock = false;
@@ -23,6 +41,88 @@ let countdownTimer = null;
 const params = new URLSearchParams(location.search);
 if (params.get('room')) $('roomInput').value = params.get('room').toUpperCase();
 try { $('roomInput').value ||= localStorage.getItem('buzz-room') || ''; $('nameInput').value ||= localStorage.getItem('buzz-name') || ''; } catch {}
+
+/* ---------- LAN mode bar (room-code + LAN-host join) ---------- */
+let lanMode = 'internet';
+try {
+  const L0 = window.BuzzLan;
+  if (L0) {
+    const s0 = L0.normalizeServer(L0.getSavedServer() || lanServer || params.get('server') || '');
+    if (s0 && s0.indexOf('http://') === 0) lanMode = 'lan';
+    else if ((L0.getSavedMode() || '') === 'lan' && s0) lanMode = 'lan';
+  }
+} catch {}
+function paintLanMode() {
+  try {
+    const tag = $('lanModeTag');
+    if (tag) tag.textContent = lanMode === 'lan' ? 'LAN · zero delay' : 'Internet';
+    const f = $('lanFields');
+    if (f) f.style.display = lanMode === 'lan' ? 'block' : 'none';
+    const mi = $('modeInternet'), ml = $('modeLan');
+    if (mi) mi.classList.toggle('go', lanMode !== 'lan');
+    if (ml) ml.classList.toggle('go', lanMode === 'lan');
+    // redirect banner: only when a LAN host is known AND this page can't reach it
+    const L = window.BuzzLan;
+    const srv = (L && (L.normalizeServer(($('lanServerInput')?.value || '') || lanServer || L.getSavedServer() || ''))) || '';
+    const bar = $('lanRedirectBar');
+    if (bar) {
+      const blocked = !!(L && srv && L.isBlockedByMixedContent(srv) && !L.isSameOrigin(srv));
+      bar.style.display = blocked ? 'block' : 'none';
+      const btn = $('lanRedirectBtn');
+      if (btn && blocked) {
+        btn.onclick = () => {
+          const room = ($('roomInput')?.value || params.get('room') || '').toUpperCase().trim();
+          L.setSavedServer(srv); L.setSavedMode('lan');
+          L.goLan(srv, 'play.html', room || undefined);
+        };
+      }
+    }
+  } catch {}
+}
+function initLanBar() {
+  try {
+    const L = window.BuzzLan;
+    if (!L) return;
+    const input = $('lanServerInput');
+    const pre = L.normalizeServer(params.get('server') || L.getSavedServer() || lanServer || '') || '';
+    if (input && pre) input.value = pre.replace(/^https?:\/\//, '');
+    if (pre && pre.indexOf('http://') === 0) lanMode = 'lan';
+    const mi = $('modeInternet'), ml = $('modeLan');
+    if (mi) mi.onclick = () => { lanMode = 'internet'; L.setSavedMode('internet'); paintLanMode(); toast('Internet mode — join with the https link'); };
+    if (ml) ml.onclick = () => { lanMode = 'lan'; L.setSavedMode('lan'); paintLanMode(); try { input?.focus(); } catch {} };
+    const test = $('lanTestBtn');
+    if (test) test.onclick = async () => {
+      const srv = L.normalizeServer(input?.value || '');
+      if (!srv) { $('lanStatus').textContent = 'Enter the host address, e.g. 192.168.1.20:3000'; return; }
+      $('lanStatus').textContent = 'Probing ' + srv + ' …';
+      test.disabled = true;
+      const r = await L.testServer(srv, 3000);
+      test.disabled = false;
+      if (r.ok) { $('lanStatus').textContent = `Host reachable — ${r.ms} ms. Tap “Open LAN version”, then join with the room code.`; L.setSavedServer(srv); L.setSavedMode('lan'); lanServer = srv; }
+      else $('lanStatus').textContent = r.error || 'Unreachable.';
+      paintLanMode();
+    };
+    const open = $('lanOpenBtn');
+    if (open) open.onclick = () => {
+      const srv = L.normalizeServer(input?.value || '');
+      if (!srv) { $('lanStatus').textContent = 'Enter the host address first.'; return; }
+      L.setSavedServer(srv); L.setSavedMode('lan');
+      const room = ($('roomInput')?.value || '').toUpperCase().trim();
+      L.goLan(srv, 'play.html', room || undefined);
+    };
+    if (input) input.addEventListener('input', () => { lanServer = L.normalizeServer(input.value) || lanServer; paintLanMode(); });
+    if (input) input.addEventListener('change', () => {
+      const srv = L.normalizeServer(input.value);
+      if (srv) { L.setSavedServer(srv); lanServer = srv; }
+      paintLanMode();
+    });
+    paintLanMode();
+  } catch {}
+}
+try {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initLanBar);
+  else initLanBar();
+} catch {}
 
 function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2400); }
 /* ---- screen wake: shared hardened layer (WakeLock + looping video) ----
@@ -253,6 +353,16 @@ $('joinBtn').onclick = () => {
   roomCode = $('roomInput').value.trim().toUpperCase();
   const teamName = $('nameInput').value.trim() || 'Team';
   if (roomCode.length < 4) return $('joinErr').textContent = 'Enter the 5-letter code from the host display.';
+  // LAN mode: hop onto the LAN origin first so buzz packets never touch the internet.
+  try {
+    const L = window.BuzzLan;
+    if (L && lanMode === 'lan') {
+      const srv = L.normalizeServer($('lanServerInput')?.value || lanServer || L.getSavedServer() || '');
+      if (!srv) { $('joinErr').textContent = 'LAN mode: enter the host address first (e.g. 192.168.1.20:3000).'; return; }
+      L.setSavedServer(srv); L.setSavedMode('lan');
+      if (!L.isSameOrigin(srv)) { L.goLan(srv, 'play.html', roomCode); return; }
+    }
+  } catch {}
   if (!socket.connected) { try { socket.connect(); } catch {} }
   $('joinBtn').disabled = true;
   const attempt = (retried = false) => {
@@ -263,7 +373,17 @@ $('joinBtn').onclick = () => {
         return attempt(true);
       }
       $('joinBtn').disabled = false;
-      if (err || !res?.ok) { $('joinErr').textContent = res?.error || 'Join failed — check code and connection, then retry.'; return; }
+      if (err || !res?.ok) {
+        let msg = res?.error || 'Join failed — check code and connection, then retry.';
+        try {
+          if (err && window.BuzzLan?.isHttpsPage() && /vercel|netlify/i.test(location.host)) {
+            msg = 'This internet page has no timing server. Use LAN mode below: enter the host IP + room code, then “Open LAN version”.';
+            lanMode = 'lan'; paintLanMode();
+          }
+        } catch {}
+        $('joinErr').textContent = msg;
+        return;
+      }
       team = res.team; lastAway = false;
       pendingBuzz = null; myBuzz = null; hideCountdown();
       try { localStorage.setItem('buzz-room', roomCode); localStorage.setItem('buzz-name', team.name); localStorage.setItem('buzz-team-id', team.id); } catch {}

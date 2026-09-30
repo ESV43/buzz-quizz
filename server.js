@@ -47,6 +47,25 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// ---------- LAN mode ----------
+// True zero-delay path: host laptop runs `npm start` on event Wi-Fi and every
+// terminal opens the LAN URL directly — buzzer packets never touch the
+// internet. This endpoint lets any page (Vercel or LAN) discover the LAN
+// host for the one-tap "Open LAN version" redirect (navigation http<-https
+// is allowed; only fetch/XHR is mixed-content blocked, so we redirect
+// instead of trying to socket across).
+app.get('/api/info', (req, res) => {
+  const ips = localIPs();
+  res.json({
+    ok: true,
+    now: Date.now(),
+    port: PORT,
+    publicUrl: PUBLIC_URL || null,
+    lanIps: ips,
+    lanUrls: ips.map((ip) => `http://${ip}:${PORT}`),
+  });
+});
+
 // ---------- helpers ----------
 const TEAM_COLORS = [
   '#E5484D', '#F76B15', '#FFB224', '#46A758', '#12A594', '#0090FF',
@@ -95,22 +114,51 @@ function publicBase(socket) {
   }
   return null;
 }
-function joinLinks(socket, code) {
-  const urls = [];
+/**
+ * Split join links for LAN mode.
+ *  - internetUrl: public https URL (mobile data, higher delay) or null on LAN-only.
+ *  - lanJoinUrls: same-Wi-Fi http URLs (zero internet, ~ms delay) — the LAN mode path.
+ *  - joinUrls: legacy combined list (internet first, then LAN) for old clients.
+ */
+function splitLinks(socket, code, page = 'play.html') {
   const base = publicBase(socket);
-  if (base) urls.push(`${base}/play.html?room=${code}`);
-  for (const ip of localIPs()) urls.push(`http://${ip}:${PORT}/play.html?room=${code}`);
-  if (!urls.length) urls.push(`http://localhost:${PORT}/play.html?room=${code}`);
-  return urls;
+  const internetUrl = base ? `${base}/${page}?room=${code}` : null;
+  const lanJoinUrls = localIPs().map((ip) => `http://${ip}:${PORT}/${page}?room=${code}`);
+  if (!lanJoinUrls.length) lanJoinUrls.push(`http://localhost:${PORT}/${page}?room=${code}`);
+  const joinUrls = [...(internetUrl ? [internetUrl] : []), ...lanJoinUrls];
+  return { internetUrl, lanJoinUrls, joinUrls };
+}
+function joinLinks(socket, code) {
+  return splitLinks(socket, code, 'play.html').joinUrls;
 }
 /** Direct-access companion links (room pre-filled) — LAN fallback included. */
 function companionLinks(socket, code) {
-  const urls = [];
-  const base = publicBase(socket);
-  if (base) urls.push(`${base}/companion.html?room=${code}`);
-  for (const ip of localIPs()) urls.push(`http://${ip}:${PORT}/companion.html?room=${code}`);
-  if (!urls.length) urls.push(`http://localhost:${PORT}/companion.html?room=${code}`);
-  return urls;
+  return splitLinks(socket, code, 'companion.html').joinUrls;
+}
+/** Full LAN-mode payload shared by create-room + host-rejoin. */
+async function lanPayload(socket, code) {
+  const play = splitLinks(socket, code, 'play.html');
+  const comp = splitLinks(socket, code, 'companion.html');
+  const lanQr = play.lanJoinUrls[0] || null;
+  let qr = null, lanQrData = null, companionQr = null;
+  try { qr = await QRCode.toDataURL(play.joinUrls[0]); } catch { /* ignore */ }
+  try { if (lanQr) lanQrData = await QRCode.toDataURL(lanQr); } catch { /* ignore */ }
+  try { if (comp.joinUrls[0]) companionQr = await QRCode.toDataURL(comp.joinUrls[0]); } catch { /* ignore */ }
+  return {
+    joinUrls: play.joinUrls,
+    internetUrl: play.internetUrl,
+    lanJoinUrls: play.lanJoinUrls,
+    lanUrl: lanQr,
+    qr,
+    lanQr: lanQrData,
+    companionUrl: comp.joinUrls[0] || null,
+    companionUrls: comp.joinUrls,
+    companionInternetUrl: comp.internetUrl,
+    companionLanUrls: comp.lanJoinUrls,
+    companionQr,
+    lanIps: localIPs(),
+    port: PORT,
+  };
 }
 
 // roomCode -> room
@@ -308,14 +356,10 @@ io.on('connection', (socket) => {
     socket.join(code);
     socket.data.role = 'host';
     socket.data.roomCode = code;
-    const joinUrls = joinLinks(socket, code);
-    const compUrls = companionLinks(socket, code);
-    const companionUrl = compUrls[0] || null;
-    let qr = null, companionQr = null;
-    try { qr = await QRCode.toDataURL(joinUrls[0]); } catch { /* ignore */ }
-    try { if (companionUrl) companionQr = await QRCode.toDataURL(companionUrl); } catch { /* ignore */ }
+    const lan = await lanPayload(socket, code);
     cb?.({
-      ok: true, code, companionPin, joinUrls, companionUrl, companionUrls: compUrls, qr, companionQr,
+      ok: true, code, companionPin,
+      ...lan,
       state: publicState(room), teams: publicTeams(room),
     });
     broadcastRoom(room);
@@ -332,15 +376,10 @@ io.on('connection', (socket) => {
     socket.join(room.code);
     socket.data.role = 'host';
     socket.data.roomCode = room.code;
-    const joinUrls = joinLinks(socket, room.code);
-    const compUrls = companionLinks(socket, room.code);
-    const companionUrl = compUrls[0] || null;
-    let qr = null, companionQr = null;
-    try { qr = await QRCode.toDataURL(joinUrls[0]); } catch { /* ignore */ }
-    try { if (companionUrl) companionQr = await QRCode.toDataURL(companionUrl); } catch { /* ignore */ }
+    const lan = await lanPayload(socket, room.code);
     cb?.({
       ok: true, code: room.code, companionPin: room.companionPin,
-      joinUrls, companionUrl, companionUrls: compUrls, qr, companionQr,
+      ...lan,
       state: publicState(room), teams: publicTeams(room),
     });
     broadcastRoom(room);
@@ -687,5 +726,6 @@ loadRooms();
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  BUZZ ARENA live on :${PORT}`);
   if (PUBLIC_URL) console.log(`  Public URL: ${PUBLIC_URL}`);
-  for (const ip of localIPs()) console.log(`  LAN: http://${ip}:${PORT}`);
+  for (const ip of localIPs()) console.log(`  LAN (zero-delay): http://${ip}:${PORT}  (room code joins here)`);
+  console.log(`  LAN discovery: GET /api/info`);
 });
