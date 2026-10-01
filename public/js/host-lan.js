@@ -149,6 +149,10 @@
     $('joinLinkL').dataset.full = url;
     $('qrL').src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(url);
     $('compPinL').textContent = store.companionPin;
+    var compUrl = location.origin + '/companion-p2p.html?room=' + lanCode;
+    $('companionLinkL').textContent = compUrl.replace(/^https?:\/\//, '');
+    $('companionLinkL').dataset.full = compUrl;
+    $('compQrL').src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(compUrl);
     paintPeers();
     renderLan(store.publicTeams(), store.publicState());
     toast('LAN room ' + lanCode + ' live — share the QR');

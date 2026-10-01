@@ -7,7 +7,7 @@
   --panel-2:#151a20;
   --ink:#edeff2;
   --muted:#9aa2ae;
-  --faint:#626b77;
+  --faint:#848e9b;
   --line:#22282f;
   --line-soft:#1a1f25;
   --gold:#d9a441;
@@ -36,7 +36,7 @@ a{color:inherit}
 .strip .cell:last-child{margin-left:auto; border-left:1px solid var(--line); padding-right:0; text-align:right}
 @media(max-width:640px){.strip{gap:0}.strip .cell{padding:0 12px}.strip .cell.opt{display:none}}
 @media(min-width:641px) and (max-width:1100px){.strip{flex-wrap:wrap}.strip .cell{padding:6px 14px}.strip .cell.opt{display:none}}
-.k{font-family:var(--fm); font-size:10px; letter-spacing:.24em; color:var(--faint); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
+.k{font-family:var(--fm); font-size:10.5px; letter-spacing:.22em; color:var(--faint); text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
 .v{font-family:var(--fd); font-weight:800; font-size:19px; letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
 .v.mono{font-weight:600}
 .brandline{display:flex; align-items:center; gap:12px}
@@ -63,7 +63,7 @@ a.navlink{font-family:var(--fm); font-size:11px; letter-spacing:.2em; color:var(
 a.navlink:hover{color:var(--ink)}
 
 /* ---------- sections & kickers ---------- */
-.kicker{font-family:var(--fm); font-size:10.5px; letter-spacing:.26em; color:var(--faint); text-transform:uppercase;
+.kicker{font-family:var(--fm); font-size:11px; letter-spacing:.24em; color:var(--faint); text-transform:uppercase;
   display:flex; align-items:center; gap:10px; margin:0 0 12px}
 .kicker::after{content:""; flex:1; height:1px; background:var(--line-soft)}
 h1.title{font-family:var(--fd); font-weight:800; font-stretch:114%; letter-spacing:-.02em; line-height:.98; margin:.3em 0 .35em; font-size:clamp(40px,5.6vw,68px)}
@@ -87,7 +87,7 @@ button{font-family:inherit}
 .btn.go:hover{background:#45dd8b}
 .btn.plain{background:transparent}
 .btn.plain:hover{border-color:#3a424c}
-.btn.warn{color:var(--stop); border-color:#4a2326}
+.btn.warn{color:#ef6b71; border-color:#4a2326}
 .btn.warn:hover{background:#1d1113}
 .btn.small{padding:10px 6px; font-size:11px; letter-spacing:.08em; white-space:nowrap; text-overflow:ellipsis}
 .btnrow{display:flex; gap:8px}
@@ -99,11 +99,14 @@ button{font-family:inherit}
 .deck-hint{overflow-wrap:break-word}
 .deck-hint .keys{white-space:nowrap}
 .field{margin:0 0 4px}
-.field label{display:block; font-family:var(--fm); font-size:10.5px; letter-spacing:.24em; color:var(--faint); text-transform:uppercase; margin:16px 0 7px}
+.field label{display:block; font-family:var(--fm); font-size:11px; letter-spacing:.22em; color:var(--faint); text-transform:uppercase; margin:16px 0 7px}
 .field label:first-child{margin-top:0}
 input[type=text],input[type=password],input:not([type]),select{width:100%; background:#0c0f13; border:1px solid var(--line);
   color:var(--ink); border-radius:8px; padding:13px 14px; font-size:16px; font-family:var(--fb); outline:none}
 input:focus,select:focus{border-color:#4a545f}
+input::placeholder{color:var(--muted); opacity:.75}
+:focus-visible{outline:2px solid var(--go); outline-offset:2px}
+body.light :focus-visible{outline-color:var(--accent)}
 input.code{font-family:var(--fm); text-align:center; letter-spacing:.4em; text-indent:.4em; font-size:24px; font-weight:600; text-transform:uppercase}
 .err{color:var(--stop); font-size:13px; min-height:20px; margin:8px 0 0}
 .note{color:var(--faint); font-size:12.5px; line-height:1.6}
@@ -287,10 +290,10 @@ body.present #exitPresent{display:block}
 .kicker .mini-toggle{flex:none}
 .kicker::after{flex:1}
 /* stay-awake dot (host roster) — green protected, gold at risk, grey unknown */
-.rrow .wdot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:7px; vertical-align:1px; background:#626b77}
+.rrow .wdot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-left:7px; vertical-align:1px; background:var(--faint)}
 .rrow .wdot.on{background:var(--go); box-shadow:0 0 6px rgba(52,209,123,.7)}
 .rrow .wdot.off{background:var(--gold); box-shadow:0 0 6px rgba(217,164,65,.7)}
-.rrow .wdot.na{background:#626b77}
+.rrow .wdot.na{background:var(--faint)}
 /* away / tab-switch badge */
 .rrow .away{font-family:var(--fm); font-size:10px; letter-spacing:.14em; color:#0a0c0e;
   background:var(--gold); border-radius:5px; padding:2px 7px; white-space:nowrap}
@@ -338,7 +341,7 @@ table.board tr.fresh td{animation:rowFresh 1.4s ease}
   25%{opacity:1}100%{opacity:0; box-shadow:inset 0 0 0 3px transparent, inset 0 0 70px transparent}}
 .toast{animation:toastIn .25s cubic-bezier(.2,.9,.3,1.2)}
 @keyframes toastIn{from{transform:translate(-50%,8px); opacity:0} to{transform:translate(-50%,0); opacity:1}}
-.btn.confirm{border-color:var(--stop); color:var(--stop)}
+.btn.confirm{border-color:var(--stop); color:#ef6b71}
 #connBar{display:none; margin-top:14px; border:1px solid #4a3a1c; background:#1a1409; color:var(--gold);
   border-radius:8px; padding:10px 14px; font-family:var(--fm); font-size:12px; letter-spacing:.1em; text-align:center}
 #connBar.show{display:block; animation:toastIn .25s ease}
@@ -368,7 +371,7 @@ body.light{
   --panel-2:#f0f0f4;
   --ink:#1d1d1f;
   --muted:#6e6e73;
-  --faint:#86868b;
+  --faint:#5f5f66;
   --line:#d2d2d7;
   --line-soft:#e8e8ed;
   --gold:#8a5a00;
