@@ -1,7 +1,21 @@
-# Buzz Arena v2 — Quiz Buzzer for 8–20 Teams
+# QSI Buzz — Quiz Buzzer for 8–20 Teams
 
-Broadcast-grade buzzer system. One laptop hosts, up to twenty phones/tablets buzz in,
+Broadcast-grade buzzer system. Up to twenty phones/tablets buzz in,
 results ranked by latency-compensated time, plus a PIN-locked companion remote.
+
+## Recommended: browser host — no install (Mini Militia style)
+
+Open the Vercel site on the host laptop → **Browser host · no install**
+(`host-p2p.html`) → Create room → teams scan the QR (`play-p2p.html?room=XXXXX`).
+
+- No `npm install`. The host tab IS the timing server (WebRTC DataChannels,
+  PeerJS cloud does signaling only).
+- Same event Wi-Fi = LAN-direct buzzes (~5–20 ms). Internet relay is the
+  automatic fallback (still playable, higher jitter).
+- Requirements: internet once to load the page + signaling; host tab stays
+  open/frontmost; laptop set to never sleep while plugged in.
+- Classic `npm start` LAN mode (`host.html`, ~3 ms) is still available and is
+  the lowest-latency option when you can run Node.
 
 ## Hosting — read this before event day
 

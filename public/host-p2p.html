@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Browser Host — QSI (no install)</title>
+<link rel="stylesheet" href="/css/arena.css?v=17"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="/js/p2p.js?v=1"></script>
+<script src="/js/p2p-host-store.js?v=1"></script>
+<script src="/js/theme.js?v=2"></script>
+<meta name="theme-color" content="#0a0c0e"/>
+</head>
+<body>
+<div class="wrap" style="max-width:1320px">
+  <header class="strip">
+    <div class="cell">
+      <div class="brandline"><img class="brandlogo" src="/qsi.jpg?v=1" alt="QSI"/><span class="brandname">QSI</span></div>
+      <span class="k">Browser host · no install</span>
+    </div>
+    <div class="cell"><span class="k">Room</span><span class="v mono" id="roomCodeStrip">— — — — —</span></div>
+    <div class="cell opt"><span class="k">Question</span><span class="v" id="qNumStrip">–</span></div>
+    <div class="cell"><span class="k">Link</span><span class="v" style="font-size:15px" id="connPill"><span class="livedot idle"></span>Starting…</span></div>
+    <div class="cell hact"><button class="theme-toggle" data-theme-btn type="button">Light</button><a class="navlink" href="/">Lobby</a></div>
+  </header>
+
+  <div id="setup" class="panel" style="max-width:600px;margin:30px auto">
+    <div class="kicker">Mini Militia style · this tab IS the server</div>
+    <h2 class="ptitle">Host from this browser</h2>
+    <div class="field"><label>Hosting mode — pick before creating</label>
+      <div class="btnrow">
+        <button class="btn plain small go" id="modeBrowserBtn" type="button">Browser · no install</button>
+        <button class="btn plain small" id="modeServerBtn" type="button">Node server · internet + LAN</button>
+      </div>
+      <p class="note" style="margin:8px 0 0">Browser mode: links below will be <b class="mono">play-p2p.html</b> (Vercel URL, LAN-direct). For classic Node-server rooms, switch to Server mode — links become <b class="mono">play.html</b>.</p>
+    </div>
+    <p class="sub">No <span class="mono">npm install</span>. This page (loaded from Vercel) becomes the timing host over WebRTC. Phones open the Vercel join link; on shared event Wi-Fi the buzz packets go direct LAN (~5–20 ms). Internet is only used to load the page + introduce the peers.</p>
+    <div class="guide">
+      <div class="gstep"><b>01</b><span>Create — <b>code + QR</b> appear below</span></div>
+      <div class="gstep"><b>02</b><span>Teams join on event Wi-Fi via the Vercel link (same as you opened)</span></div>
+      <div class="gstep"><b>03</b><span>Keep this tab frontmost, laptop on Never-sleep while plugged in</span></div>
+    </div>
+    <div class="field"><label>Team capacity</label>
+      <select id="maxTeams"><option>8</option><option>10</option><option>12</option><option selected>16</option><option>20</option></select>
+    </div>
+    <div class="btnrow" style="margin-top:16px"><button class="btn go" id="createBtn">Create browser room</button></div>
+    <p class="err" id="setupErr"></p>
+    <p class="note" style="margin-top:12px">Classic laptop-as-Node-server LAN mode (<span class="mono">npm start</span>, ~3 ms) is still in <a href="/host.html">Host console</a>. This browser mode trades a few ms for zero install.</p>
+  </div>
+
+  <div id="studio" class="studio" style="display:none">
+    <aside class="rail">
+      <section class="panel">
+        <div class="kicker">State</div>
+        <div class="stateword locked" id="stateWord">LOCKED</div>
+        <div class="statesub" id="stateSub">Awaiting arm</div>
+        <div class="qline"><span class="k">Question</span><span class="qn" id="qNum">–</span></div>
+        <div class="qline"><span class="k">Room</span><span class="roomcode" id="roomCode">–––––</span></div>
+        <p class="note" id="peerNote" style="margin:10px 0 0"></p>
+      </section>
+      <section class="panel deck">
+        <div class="kicker">Control deck</div>
+        <button class="btn go" id="armBtn" style="padding:17px">Arm buzzer</button>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn plain" id="lockBtn">Lock</button>
+          <button class="btn plain" id="nextBtn">Next</button>
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn warn" id="resetBtn">Reset</button>
+          <button class="btn plain" id="presentBtn">Present</button>
+        </div>
+        <div class="btnrow" style="margin-top:8px"><button class="btn warn small" id="endRoomBtn">End room</button></div>
+      </section>
+      <section class="panel">
+        <div class="kicker">Team entry · Browser mode → <span class="mono">play-p2p.html</span> · Vercel link</div>
+        <div class="qrrow">
+          <img id="qr" alt="Join QR code"/>
+          <div>
+            <div class="note">Same link you opened — players must have internet once to load it, then LAN-direct for buzzes.</div>
+            <div class="joinlist" style="margin-top:8px"><span class="prime" id="joinLink">—</span></div>
+            <div class="btnrow" style="margin-top:8px"><button class="btn plain small" id="copyBtn" type="button">Copy link</button></div>
+          </div>
+        </div>
+        <p class="note" style="margin:8px 0 0">Companion PIN: <b class="mono" id="compPin">····</b> · remote: <b class="mono">/companion-p2p.html</b> (coming next — players first).</p>
+      </section>
+    </aside>
+    <main>
+      <section class="spot" id="spot">
+        <div class="kicker" id="spotKicker" style="margin-bottom:0">Standby</div>
+        <div class="s-name" id="spotName">Awaiting first buzz</div>
+        <div class="s-meta" id="spotMargin">ARM THE BUZZER TO OPEN THE QUESTION</div>
+      </section>
+      <section class="panel" style="margin-top:14px">
+        <div class="kicker">Standings · delay-compensated <span class="buzzcount" id="buzzCount"></span><span id="teamCount" style="margin-left:10px"></span></div>
+        <div style="overflow-x:auto"><table class="board">
+          <thead><tr><th>Pos</th><th>Team</th><th>Press time</th><th>Margin</th><th>Link</th></tr></thead>
+          <tbody id="rankBody"></tbody>
+        </table></div>
+      </section>
+      <section style="margin-top:14px">
+        <div class="kicker">Roster · select × to remove</div>
+        <div class="roster" id="roster"></div>
+      </section>
+    </main>
+  </div>
+  <footer>QSI · browser host (WebRTC, no install)</footer>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function toast(m) { var t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, 2600); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]); }); }
+
+  var peer = null, store = null, roomCode = null;
+  var peers = new Map(); // peerId -> { wrapped, role, teamId }
+
+  function broadcastAll(type, payload) {
+    for (var entry of peers.values()) {
+      try { entry.wrapped.send(type, payload); } catch (e) {}
+    }
+    if (type === 'room-update' || type === 'buzz-update') renderAll(payload.teams || store.publicTeams(), payload.state || payload);
+    if (type === 'control-event') onControlEvent(payload);
+  }
+
+  function onControlEvent(d) {
+    if (d && d.action === 'countdown') renderCountdown(d.count || 3, d.questionNo);
+  }
+
+  $('createBtn').onclick = async function () {
+    $('setupErr').textContent = '';
+    $('createBtn').disabled = true;
+    var ok = await window.BuzzP2P.ensurePeerJs();
+    if (!ok) { $('setupErr').textContent = 'Could not load WebRTC lib — check internet and reload.'; $('createBtn').disabled = false; return; }
+    var code = window.BuzzP2P.makeRoomCode();
+    var id = window.BuzzP2P.roomToPeerId(code);
+    try { peer = new Peer(id, { debug: 0 }); }
+    catch (e) { $('setupErr').textContent = 'Browser blocked WebRTC — use Chrome / Safari.'; $('createBtn').disabled = false; return; }
+    peer.on('error', function (err) {
+      if (err && (err.type === 'unavailable-id' || err.type === 'peer-unavailable')) {
+        try { peer.destroy(); } catch (e) {}
+        $('setupErr').textContent = 'Code clash — tap Create again.';
+        $('createBtn').disabled = false;
+      } else {
+        toast('Peer link: ' + ((err && err.type) || 'notice'));
+      }
+    });
+    peer.on('open', function () {
+      roomCode = code;
+      store = window.BuzzP2PStore.create({
+        maxTeams: parseInt($('maxTeams').value, 10) || 16,
+        onBroadcast: broadcastAll,
+      });
+      enterStudio();
+    });
+    peer.on('connection', function (conn) {
+      conn.on('open', function () {
+        var wrapped = window.BuzzP2P.wrapConn(conn, function (msg, reply) { routeMessage(conn, wrapped, msg, reply); });
+        peers.set(conn.peer, { wrapped: wrapped, role: 'unknown', teamId: null, conn: conn });
+        paintPeers();
+        conn.on('close', function () { dropPeer(conn.peer); });
+        conn.on('error', function () { dropPeer(conn.peer); });
+      });
+    };
+    peer.on('disconnected', function () { try { peer.reconnect(); } catch (e) {} });
+  };
+
+  function dropPeer(pid) {
+    peers.delete(pid);
+    paintPeers();
+    try { renderAll(store.publicTeams(), store.publicState()); } catch (e) {}
+  }
+
+  function routeMessage(conn, wrapped, msg, reply) {
+    var entry = peers.get(conn.peer);
+    if (!entry) return;
+    var t = msg.t;
+    if (t === 'time-sync') return reply({ serverTime: Date.now() });
+    if (t === 'join-as-player') {
+      var res = store.handlePlayerJoin(msg, conn.peer);
+      if (res.ok) { entry.role = 'player'; entry.teamId = res.team.id; }
+      reply(res);
+      paintPeers();
+      return;
+    }
+    if (t === 'buzz') {
+      var r = store.handleBuzz({ teamId: entry.teamId, clientPressTime: msg.clientPressTime, offset: msg.offset, rtt: msg.rtt, buzzId: msg.buzzId });
+      reply(r);
+      return;
+    }
+    if (t === 'rename-team') {
+      // minimal: handled via rejoin with new name; ack ok
+      return reply({ ok: true });
+    }
+    if (t === 'update-netstats' || t === 'focus-status' || t === 'wake-status') {
+      return reply({ ok: true });
+    }
+    if (t === 'join-as-spectator') {
+      entry.role = 'spectator';
+      paintPeers();
+      return reply({ ok: true, state: store.publicState(), teams: store.publicTeams() });
+    }
+    return reply({ ok: false, error: 'Unknown message' });
+  }
+
+  function joinUrl() {
+    return location.origin + '/play-p2p.html?room=' + roomCode;
+  }
+  function enterStudio() {
+    $('setup').style.display = 'none';
+    $('studio').style.display = 'grid';
+    $('roomCode').textContent = roomCode;
+    $('roomCodeStrip').textContent = roomCode.split('').join(' ');
+    $('connPill').innerHTML = '<span class="livedot"></span>Hosting in this tab';
+    $('joinLink').textContent = joinUrl().replace(/^https?:\/\//, '');
+    $('qr').src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(joinUrl());
+    $('compPin').textContent = store.companionPin;
+    paintPeers();
+    renderAll(store.publicTeams(), store.publicState());
+    toast('Browser room ' + roomCode + ' live — share the QR');
+  }
+  function paintPeers() {
+    var n = peers.size;
+    var el = $('peerNote');
+    if (el) el.textContent = n ? (n + ' device(s) linked (LAN-direct when on shared Wi-Fi).') : 'No devices yet — share the QR. This tab must stay open.';
+  }
+  $('copyBtn').onclick = function () {
+    try { navigator.clipboard.writeText(joinUrl()).then(function () { toast('Join link copied'); }, function () { toast('Copy failed — long-press to copy'); }); }
+    catch (e) { toast('Copy failed — long-press to copy'); }
+  };
+
+  function control(action) {
+    if (!store) return;
+    store.control(action);
+    renderAll(store.publicTeams(), store.publicState());
+  }
+  $('armBtn').onclick = function () { control('arm'); };
+  $('nextBtn').onclick = function () { control('next'); };
+  $('lockBtn').onclick = function () { control('lock'); };
+  $('resetBtn').onclick = function () { control('reset'); };
+  var presentOn = false;
+  $('presentBtn').onclick = function () {
+    presentOn = !presentOn;
+    document.body.classList.toggle('present', presentOn);
+    $('presentBtn').textContent = presentOn ? 'Console' : 'Present';
+  };
+  $('endRoomBtn').onclick = function () {
+    if (!store) return;
+    if ($('endRoomBtn').dataset.armed) {
+      try { store.close(); } catch (e) {}
+      for (var e of peers.values()) { try { e.conn.close(); } catch (err) {} }
+      peers.clear();
+      try { peer.destroy(); } catch (err) {}
+      location.reload();
+    } else {
+      $('endRoomBtn').dataset.armed = '1';
+      $('endRoomBtn').textContent = 'Confirm end?';
+      setTimeout(function () { $('endRoomBtn').dataset.armed = ''; $('endRoomBtn').textContent = 'End room'; }, 3000);
+    }
+  };
+  $('roster').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-kick]');
+    if (!b || !store) return;
+    store.kick(b.dataset.kick);
+    renderAll(store.publicTeams(), store.publicState());
+  });
+
+  var lastWinnerId = null;
+  function renderCountdown(count, q) {
+    $('stateWord').textContent = 'READY ' + count;
+    $('spotKicker').textContent = 'Question ' + q + ' — get ready';
+    $('spotName').textContent = String(count);
+    $('spotMargin').textContent = 'BUZZERS OPEN WHEN THE COUNT HITS ZERO';
+    setQ(q);
+  }
+  function setQ(n) {
+    var t = String(n == null ? '–' : n);
+    $('qNum').textContent = t;
+    $('qNumStrip').textContent = 'Q' + t;
+  }
+  function renderAll(teams, state) {
+    if (!state) return;
+    $('teamCount').textContent = teams.length + ' TEAMS';
+    $('buzzCount').textContent = state.buzzes && state.buzzes.length ? (state.buzzes.length + ' IN') : '';
+    if (state.countdown && state.countdown.active) {
+      var remain = Math.max(0, (state.countdown.endsAt || Date.now()) - Date.now());
+      var c = Math.min(3, Math.max(1, Math.ceil((remain + 60) / 1000)));
+      renderCountdown(c, state.questionNo);
+    } else {
+      var w = $('stateWord');
+      w.classList.toggle('live', !!state.armed);
+      w.classList.toggle('locked', !state.armed);
+      w.textContent = state.armed ? 'LIVE' : 'LOCKED';
+      $('stateSub').textContent = state.armed ? 'Accepting presses' : 'Awaiting arm';
+      setQ(state.questionNo);
+      var win = (state.buzzes || [])[0] || null;
+      if (!win) {
+        $('spotKicker').textContent = state.armed ? ('Question ' + state.questionNo + ' — open') : 'Standby';
+        $('spotName').textContent = 'Awaiting first buzz';
+        $('spotMargin').textContent = state.armed ? 'BUZZERS LIVE — FIRST VALID PRESS TAKES P1' : 'ARM THE BUZZER TO OPEN THE QUESTION';
+      } else {
+        $('spotKicker').textContent = 'Question ' + state.questionNo + ' — first buzz';
+        $('spotName').textContent = win.teamName;
+        $('spotMargin').textContent = 'MARGIN +0 MS · CORRECTED · LINK ' + (win.rtt == null ? '–' : win.rtt) + ' MS';
+        if (win.teamId !== lastWinnerId) { lastWinnerId = win.teamId; }
+      }
+    }
+    $('rankBody').innerHTML = (state.buzzes || []).map(function (b) {
+      return '<tr><td class="pos">P' + b.rank + '</td><td><span class="tchip" style="background:' + esc(b.color) + '"></span>' + esc(b.teamName) + '</td>'
+        + '<td class="num">' + new Date(b.adjustedTime).toLocaleTimeString() + '</td>'
+        + '<td class="tmargin">' + (b.deltaMs === 0 ? '+0 — P1' : '+' + b.deltaMs) + '</td>'
+        + '<td class="num">' + (b.rtt == null ? '–' : b.rtt) + ' ms</td></tr>';
+    }).join('');
+    $('roster').innerHTML = teams.map(function (t) {
+      return '<div class="rrow" style="--c:' + esc(t.color) + '"><span class="bar"></span><span class="nm">' + esc(t.name) + '</span>'
+        + '<span class="st in">IN</span><button class="rm" data-kick="' + esc(t.id) + '">×</button></div>';
+    }).join('');
+  }
+  // Mode selector (setup only): mirror of host.html. Switching navigates
+  // before any room exists, so links stay mode-correct.
+  try {
+    var _msb = document.getElementById('modeServerBtn');
+    if (_msb) _msb.onclick = function () { location.href = '/host.html'; };
+    // Pre-fill capacity when arriving from host.html (?maxTeams=).
+    var _q = new URLSearchParams(location.search).get('maxTeams');
+    if (_q && document.getElementById('maxTeams')) {
+      var _sel = document.getElementById('maxTeams');
+      for (var _i = 0; _i < _sel.options.length; _i++) {
+        if (_sel.options[_i].text === _q || _sel.options[_i].value === _q) { _sel.selectedIndex = _i; break; }
+      }
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

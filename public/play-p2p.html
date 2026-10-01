@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>Buzzer (no install) — QSI</title>
+<link rel="stylesheet" href="/css/arena.css?v=17"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="/js/p2p.js?v=1"></script>
+<script src="/js/theme.js?v=2"></script>
+<script src="/js/wake.js?v=2"></script>
+<meta name="theme-color" content="#0a0c0e"/>
+</head>
+<body>
+<div id="teamGlow" style="position:fixed;inset:0;pointer-events:none;z-index:0"></div>
+<div class="wrap" style="max-width:600px;position:relative;z-index:1">
+  <header class="strip">
+    <div class="cell"><div class="brandline"><img class="brandlogo" src="/qsi.jpg?v=1" alt="QSI"/><span class="brandname">QSI</span></div></div>
+    <div class="cell"><span class="k">Room</span><span class="v mono" id="roomTag" style="font-size:16px">— — —</span></div>
+    <div class="cell hact"><button class="theme-toggle" data-theme-btn type="button">Light</button></div>
+  </header>
+  <div id="connBar">CONNECTION LOST — RECONNECTING</div>
+  <div id="joinView" class="panel" style="margin-top:26px">
+    <div class="kicker">Check in · browser-hosted room · no install</div>
+    <h2 class="ptitle">Join the round</h2>
+    <p class="sub">This page came from Vercel. Your buzz goes <b>direct to the host tab</b> over event Wi-Fi (LAN-direct, Mini Militia style) — no app, no npm. Internet is only needed to load this page. Joining a <b>Node-server</b> room instead? <a href="/play.html">Open the server join page</a> — codes only work in their own mode.</p>
+    <div class="field"><label>Room code</label><input id="roomInput" class="code" placeholder="·····" maxlength="5" autocomplete="off"/></div>
+    <div class="field"><label>Team name</label><input id="nameInput" placeholder="e.g. North Campus" maxlength="24" autocomplete="off"/></div>
+    <div class="btnrow" style="margin-top:16px"><button class="btn go" id="joinBtn">Join room</button></div>
+    <p class="err" id="joinErr"></p>
+    <p class="note" id="linkNote"></p>
+  </div>
+  <div id="playView" style="display:none">
+    <div class="phead" style="margin-top:22px">
+      <div class="cell"><span class="k">Question</span><span class="v mono" id="qPill" style="font-size:17px">–</span></div>
+      <div class="cell"><span class="k">State</span><span class="v" id="stateTag" style="font-size:17px">Locked</span></div>
+      <div class="cell"><span class="k">Sync</span><span class="v mono" id="netPill" style="font-size:17px">—</span></div>
+    </div>
+    <div class="ident"><span class="chip" id="teamChip"></span><h1 id="teamName">Team</h1></div>
+    <div class="stagelayout">
+      <div class="stage"><div class="dial" id="dial"><div class="dial-ticks"></div><button id="buzzBtn" class="locked">WAIT</button></div></div>
+      <div class="side">
+        <div class="readout st-idle" id="readout"><div class="r-pos" id="status">LOCKED</div><div class="r-sub" id="rankLine">WAITING FOR HOST</div></div>
+        <div class="order"><div class="kicker">Order of press</div><div id="miniRanks"><p class="note">No presses.</p></div></div>
+      </div>
+    </div>
+  </div>
+  <footer>QSI · browser-hosted buzzer</footer>
+</div>
+<div class="toast" id="toast"></div>
+<div id="edgeFlash"></div>
+<div id="countOverlay"><div class="count-num" id="countNum">3</div><div class="count-sub" id="countSub">GET READY</div></div>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function toast(m) { var t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, 2400); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]); }); }
+  var q = new URLSearchParams(location.search);
+  try {
+    $('roomInput').value = (q.get('room') || localStorage.getItem('buzz-room') || '').toUpperCase();
+    $('nameInput').value = localStorage.getItem('buzz-name') || '';
+  } catch (e) {}
+  var me = null, roomCode = null, clockOffset = 0, rtt = 0;
+  var armed = false, questionNo = 0, myBuzz = null, pendingBuzz = null, countdown = null, countdownTimer = null;
+  var peer = null, link = null; // wrapped DataConnection
+
+  try { window.BuzzWake && window.BuzzWake.keepAwake(); } catch (e) {}
+
+  function nowServer() { return Date.now() + (clockOffset || 0); }
+  function tickFromRemain(ms) { return Math.max(1, Math.ceil((Math.max(0, ms) + 60) / 1000)); }
+  function showCountdown(c, ques) {
+    var ov = $('countOverlay');
+    ov.classList.add('show');
+    $('countNum').textContent = String(c);
+    $('countSub').textContent = ques ? ('QUESTION ' + ques + ' — BUZZERS OPEN IN') : 'GET READY';
+  }
+  function hideCountdown() { $('countOverlay').classList.remove('show'); countdown = null; if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
+
+  $('joinBtn').onclick = async function () {
+    roomCode = $('roomInput').value.trim().toUpperCase();
+    var name = $('nameInput').value.trim() || 'Team';
+    if (!/^[A-Z0-9]{4,6}$/.test(roomCode)) { $('joinErr').textContent = 'Enter the 5-letter code from the host display.'; return; }
+    $('joinBtn').disabled = true;
+    $('joinErr').textContent = '';
+    $('linkNote').textContent = 'Opening direct link to host… (same Wi-Fi = LAN-direct)';
+    var okLib = await window.BuzzP2P.ensurePeerJs();
+    if (!okLib) { $('joinErr').textContent = 'WebRTC lib blocked — check internet once, then retry.'; $('joinBtn').disabled = false; return; }
+    try { peer = new Peer({ debug: 0 }); }
+    catch (e) { $('joinErr').textContent = 'Browser blocked WebRTC — use Chrome / Safari.'; $('joinBtn').disabled = false; return; }
+    peer.on('error', function (err) { $('joinErr').textContent = 'Link notice: ' + ((err && err.type) || 'peer'); $('joinBtn').disabled = false; });
+    peer.on('open', function () {
+      var hostId = window.BuzzP2P.roomToPeerId(roomCode);
+      var conn = peer.connect(hostId, { reliable: true });
+      conn.on('open', async function () {
+        link = window.BuzzP2P.wrapConn(conn, onHostMessage);
+        $('linkNote').textContent = 'Direct link open — syncing clock…';
+        await syncClock();
+        var savedId = null;
+        try { savedId = localStorage.getItem('buzz-team-id'); } catch (e) {}
+        var res = await link.request('join-as-player', { code: roomCode, teamName: name, teamId: savedId, offset: Math.round(clockOffset), rtt: rtt }, 9000);
+        $('joinBtn').disabled = false;
+        if (!res || !res.ok) { $('joinErr').textContent = (res && res.error) || 'Host not found — same Wi-Fi? Host tab open? Code correct?'; return; }
+        me = res.team;
+        try { localStorage.setItem('buzz-room', roomCode); localStorage.setItem('buzz-name', me.name); localStorage.setItem('buzz-team-id', me.id); } catch (e) {}
+        $('joinView').style.display = 'none';
+        $('playView').style.display = 'block';
+        $('roomTag').textContent = roomCode.split('').join(' ');
+        applyTeam();
+        if (res.state) onState(res.state);
+        toast('Checked in as ' + me.name);
+      });
+      conn.on('close', function () { $('connBar').classList.add('show'); });
+      conn.on('error', function () { $('connBar').classList.add('show'); });
+    });
+  };
+
+  async function syncClock() {
+    var samples = [];
+    for (var i = 0; i < 3; i++) {
+      var t0 = Date.now();
+      var r = await link.request('time-sync', { t0: t0 }, 1500);
+      var t3 = Date.now();
+      if (r && r.serverTime) samples.push({ off: r.serverTime - (t0 + t3) / 2, rtt: t3 - t0 });
+    }
+    if (!samples.length) return;
+    samples.sort(function (a, b) { return a.rtt - b.rtt; });
+    var best = samples.slice(0, Math.max(1, Math.ceil(samples.length / 2)));
+    function med(a) { a = a.slice().sort(function (x, y) { return x - y; }); return a[Math.floor(a.length / 2)]; }
+    clockOffset = med(best.map(function (s) { return s.off; }));
+    rtt = Math.round(med(best.map(function (s) { return s.rtt; })));
+    $('netPill').textContent = '±' + Math.round(rtt / 2);
+    $('linkNote').textContent = rtt <= 30 ? ('LAN-direct link ~' + rtt + ' ms — lag-free zone.') : ('Link ~' + rtt + ' ms (internet relay — still playable, LAN Wi-Fi is faster).');
+  }
+
+  function onHostMessage(msg) {
+    if (!msg || !msg.t) return;
+    if (msg.t === 'room-update' || msg.t === 'buzz-update') onState(msg.state || msg);
+    else if (msg.t === 'control-event') onControl(msg);
+    else if (msg.t === 'kicked' && msg.teamId === (me && me.id)) { toast('Removed by host'); setTimeout(function () { location.reload(); }, 1200); }
+    else if (msg.t === 'room-closed') { toast('Room closed by host'); setTimeout(function () { location.reload(); }, 1200); }
+  }
+  function onState(state) {
+    if (!state) return;
+    questionNo = state.questionNo || questionNo;
+    if (state.countdown && state.countdown.active) {
+      countdown = { endsAt: state.countdown.endsAt, questionNo: state.questionNo };
+      var remain = Math.max(0, countdown.endsAt - nowServer());
+      showCountdown(Math.min(3, tickFromRemain(remain)), state.questionNo);
+      armed = false;
+    } else {
+      if (countdown) hideCountdown();
+      armed = !!state.armed;
+      var mine = (state.buzzes || []).find(function (b) { return me && b.teamId === me.id; });
+      myBuzz = mine ? { rank: mine.rank, deltaMs: mine.deltaMs } : (state.questionNo !== questionNo ? null : myBuzz);
+      if (state.questionNo !== questionNo) { questionNo = state.questionNo; }
+      renderMini(state.buzzes || []);
+      if (myBuzz) renderMine();
+    }
+    paintState();
+  }
+  function onControl(d) {
+    if (d.action === 'countdown') {
+      myBuzz = null; pendingBuzz = null; armed = false;
+      countdown = { endsAt: d.endsAt || (nowServer() + (d.count || 3) * 1000), questionNo: d.questionNo };
+      if (d.questionNo) questionNo = d.questionNo;
+      showCountdown(d.count || 3, questionNo);
+      paintState();
+    } else if (d.action === 'arm') {
+      hideCountdown(); myBuzz = null; pendingBuzz = null;
+      toast('Buzzers live'); paintState();
+    } else if (d.action === 'lock' || d.action === 'reset') {
+      hideCountdown(); if (d.action === 'reset') myBuzz = null;
+      pendingBuzz = null; paintState();
+    }
+  }
+
+  function applyTeam() {
+    $('teamName').textContent = me.name;
+    $('teamChip').style.background = me.color;
+    $('buzzBtn').style.setProperty('--team', me.color);
+    $('dial').style.setProperty('--team', me.color);
+  }
+  function paintState() {
+    $('qPill').textContent = questionNo ? ('Q' + questionNo) : '–';
+    var btn = $('buzzBtn');
+    if (countdown) {
+      $('stateTag').textContent = 'Ready';
+      btn.textContent = 'READY'; btn.classList.remove('armed'); btn.classList.add('locked');
+      $('status').textContent = 'READY'; $('rankLine').textContent = 'HOLD — COUNTDOWN';
+      return;
+    }
+    $('stateTag').textContent = armed ? 'Live' : 'Locked';
+    if (!armed) {
+      btn.textContent = 'WAIT'; btn.classList.remove('armed'); btn.classList.add('locked');
+      $('dial').classList.remove('armed');
+      $('status').textContent = 'LOCKED'; $('rankLine').textContent = 'WAITING FOR HOST';
+    } else if (myBuzz) {
+      btn.textContent = 'P' + myBuzz.rank; btn.classList.add('armed'); btn.classList.remove('locked');
+    } else {
+      btn.textContent = 'BUZZ'; btn.classList.add('armed'); btn.classList.remove('locked');
+      $('dial').classList.add('armed');
+      $('status').textContent = 'LIVE'; $('rankLine').textContent = 'PRESS NOW';
+    }
+  }
+  function renderMine() {
+    if (!myBuzz) return;
+    $('status').textContent = myBuzz.rank === 1 ? 'FIRST' : ('P' + myBuzz.rank);
+    $('rankLine').textContent = myBuzz.rank === 1 ? 'PRESS CONFIRMED' : ('+' + myBuzz.deltaMs + ' MS');
+    try { navigator.vibrate && navigator.vibrate(40); } catch (e) {}
+    paintState();
+  }
+  function renderMini(buzzes) {
+    $('miniRanks').innerHTML = buzzes.length
+      ? buzzes.slice(0, 8).map(function (b) {
+          return '<div class="orow"><span class="mono">P' + b.rank + '</span><span class="tchip" style="background:' + esc(b.color) + '"></span><span>' + esc(b.teamName) + '</span><span class="mono">+' + b.deltaMs + '</span>' + (me && b.teamId === me.id ? '<span class="you">YOU</span>' : '') + '</div>';
+        }).join('')
+      : '<p class="note">No presses.</p>';
+  }
+
+  var btn = $('buzzBtn');
+  function makeId() { try { if (crypto.randomUUID) return crypto.randomUUID(); } catch (e) {} return 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+  btn.addEventListener('pointerdown', async function (e) {
+    if (e && e.cancelable) e.preventDefault();
+    if (!me || myBuzz || pendingBuzz) return;
+    if (countdown || !armed) return;
+    if (!link) { toast('No host link — rejoin'); return; }
+    var payload = { clientPressTime: Date.now(), offset: Math.round(clockOffset), rtt: rtt, buzzId: makeId() };
+    pendingBuzz = payload;
+    btn.textContent = '···';
+    var res = await link.request('buzz', payload, 5000);
+    pendingBuzz = null;
+    if (res && res.ok) { myBuzz = { rank: res.rank, deltaMs: res.deltaMs }; renderMine(); }
+    else { toast((res && res.error) || 'Send failed'); paintState(); }
+  });
+  paintState();
+})();
+</script>
+</body>
+</html>

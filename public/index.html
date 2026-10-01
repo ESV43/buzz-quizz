@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>Anvesha — Quiz Timing System</title>
+<title>QSI — Quiz Timing System</title>
 <link rel="stylesheet" href="/css/arena.css?v=17"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -14,12 +14,11 @@
 <div class="wrap">
   <header class="strip">
     <div class="cell">
-      <div class="brandline"><img class="brandlogo" src="/anvesha.jpeg?v=1" alt="Anvesha"/><span class="brandname">ANVESHA</span></div>
+      <div class="brandline"><img class="brandlogo" src="/qsi.jpg?v=1" alt="QSI"/><span class="brandname">QSI</span></div>
       <span class="k">Quiz timing system</span>
     </div>
     <div class="cell"><span class="k">Capacity</span><span class="v">8–20 teams</span></div>
     <div class="cell"><span class="k">Timing</span><span class="v">Compensated</span></div>
-    <div class="cell opt assoc"><span class="k">In association with</span><img class="qsihead" src="/qsi.jpg?v=1" alt="QSI"/></div>
     <div class="cell hact"><button class="theme-toggle" data-theme-btn type="button">Light</button></div>
   </header>
 
@@ -27,28 +26,38 @@
   <h1 class="title">First press wins.<br/><span class="thin">Measured to the millisecond.</span></h1>
   <p class="sub">One machine hosts the timing. Up to twenty team terminals buzz in. Every press is corrected for its own delay and ranked live — with a PIN-gated remote for the quizmaster.</p>
 
-  <div class="path" onclick="location.href='/host.html'">
+  <div class="path" onclick="location.href='/host-p2p.html'">
     <span class="p-num">01</span>
-    <div><h3>Host console</h3><p>Room code, QR entry, control deck, spotlight and standings. Projector-safe present mode.</p></div>
+    <div><h3>Browser host · no install ★</h3><p>Mini Militia style — this tab IS the server (WebRTC). Load from Vercel, host on event Wi-Fi, no npm. Use this on event day.</p></div>
+    <span class="p-go">HOST →</span>
+  </div>
+  <div class="path" onclick="location.href='/play-p2p.html'">
+    <span class="p-num">02</span>
+    <div><h3>Join browser room</h3><p>Phones and tablets. Vercel link + code — buzz goes direct to the host tab on shared Wi-Fi.</p></div>
+    <span class="p-go">JOIN →</span>
+  </div>
+  <div class="path" onclick="location.href='/host.html'">
+    <span class="p-num">03</span>
+    <div><h3>Host console (Node server)</h3><p>Classic LAN mode: <span class="mono">npm start</span> on the laptop, ~3 ms. Room code, QR entry, control deck, spotlight.</p></div>
     <span class="p-go">OPEN →</span>
   </div>
   <div class="path" onclick="location.href='/play.html'">
-    <span class="p-num">02</span>
-    <div><h3>Team terminal</h3><p>Phones and tablets. One terminal per team of two — dial, haptics, live placement.</p></div>
+    <span class="p-num">04</span>
+    <div><h3>Team terminal (Node server)</h3><p>For classic LAN rooms. One terminal per team of two — dial, haptics, live placement.</p></div>
     <span class="p-go">JOIN →</span>
   </div>
   <div class="path" onclick="location.href='/companion.html'">
-    <span class="p-num">03</span>
-    <div><h3>Quizmaster remote</h3><p>Arm, lock and advance from a phone. Separate PIN, lockouts, host alerts.</p></div>
+    <span class="p-num">05</span>
+    <div><h3>Quizmaster remote</h3><p>Arm, lock and advance from a phone. Separate PIN, lockouts, host alerts. (Browser-room remote coming next.)</p></div>
     <span class="p-go">UNLOCK →</span>
   </div>
   <div class="path" onclick="location.href='/lan.html'">
-    <span class="p-num">04</span>
-    <div><h3>LAN mode · zero delay</h3><p>Same Wi-Fi + room code. Buzzer packets never leave the room — use this on event day instead of the internet link.</p></div>
+    <span class="p-num">06</span>
+    <div><h3>LAN mode · zero delay</h3><p>Same Wi-Fi + room code for classic rooms. Buzzer packets never leave the room.</p></div>
     <span class="p-go">JOIN →</span>
   </div>
   <div class="path" onclick="location.href='/overlay.html'">
-    <span class="p-num">05</span>
+    <span class="p-num">07</span>
     <div><h3>Slides overlay</h3><p>Transparent spectator view for OBS Browser Source. Lower-third results over Google Slides, toggled per slide.</p></div>
     <span class="p-go">OPEN →</span>
   </div>
@@ -59,7 +68,7 @@
     <div class="panel"><h4>Self-hosted</h4><p><span class="mono">npm install &amp;&amp; npm start</span>. <span class="mono">PUBLIC_URL</span> optional — links and QR resolve automatically.</p></div>
   </div>
 
-  <footer>ANVESHA</footer>
+  <footer>QSI</footer>
 <script src="/js/theme.js?v=2"></script>
 </div>
 </body>

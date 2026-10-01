@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>Host Console — Anvesha</title>
+<title>Host Console — QSI</title>
 <link rel="stylesheet" href="/css/arena.css?v=17"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -17,7 +17,7 @@
 <div class="wrap" style="max-width:1320px">
   <header class="strip">
     <div class="cell">
-      <div class="brandline"><img class="brandlogo" src="/anvesha.jpeg?v=1" alt="Anvesha"/><span class="brandname">ANVESHA</span></div>
+      <div class="brandline"><img class="brandlogo" src="/qsi.jpg?v=1" alt="QSI"/><span class="brandname">QSI</span></div>
       <span class="k">Host console</span>
     </div>
     <div class="cell hidenpresent">
@@ -42,6 +42,13 @@
   <div id="setup" class="panel setuponly" style="max-width:560px; margin:30px auto">
     <div class="kicker">Session setup</div>
     <h2 class="ptitle">Open a room</h2>
+    <div class="field"><label>Hosting mode — pick before creating</label>
+      <div class="btnrow">
+        <button class="btn plain small go" id="modeServerBtn" type="button">Node server · internet + LAN</button>
+        <button class="btn plain small" id="modeBrowserBtn" type="button">Browser · no install</button>
+      </div>
+      <p class="note" id="modeNote" style="margin:8px 0 0">Server mode: runs on the Node timing server (<span class="mono">npm start</span> / Render). Links below will be <b class="mono">play.html</b> (LAN + internet). For zero-install browser hosting, switch to Browser mode — links become <b class="mono">play-p2p.html</b>.</p>
+    </div>
     <p class="sub">This machine is the timing host. Teams join by code or QR. 8–20 buzzers.</p>
     <p class="note" id="lanSetupNote" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px">For zero delay, run this page from the event laptop (<span class="mono">npm start</span>, open the <b>http://192.168.…</b> LAN address) — not the Vercel URL. Same Wi-Fi + room code = packets never leave the room. <a href="/lan.html">LAN mode guide</a></p>
     <div class="guide">
@@ -90,7 +97,7 @@
         <p class="note deck-hint" style="margin:12px 0 0"><span class="keys">Space</span> arm / lock &nbsp; <span class="keys">N</span> next &nbsp; <span class="keys">R</span> reset &nbsp; <span class="keys">O</span> overlay. Arming clears the previous standings.</p>
       </section>
       <section class="panel" id="joinPanel">
-        <div class="kicker">Team entry · <span id="lanBadge" class="mono" style="color:var(--go)">LAN — zero delay</span> <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
+        <div class="kicker">Team entry · Server mode → <span class="mono">play.html</span> · <span id="lanBadge" class="mono" style="color:var(--go)">LAN — zero delay</span> <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
         <div id="joinSecrets">
           <div class="qrrow">
             <img id="qr" alt="Join QR code"/>
@@ -155,7 +162,7 @@
     </main>
   </div>
 
-  <footer>ANVESHA · <span id="footRoom"></span></footer>
+  <footer>QSI · <span id="footRoom"></span></footer>
 </div>
 <button id="exitPresent" title="Back to console (Esc)">Exit present · Esc</button>
 <div class="toast" id="toast"></div>
@@ -163,5 +170,31 @@
 <script src="/js/theme.js?v=2"></script>
 <script src="/js/wake.js?v=2"></script>
 <script src="/js/host.js?v=9"></script>
+<script>
+// Mode selector (setup only): both modes coexist. Server = this page (Node/Socket.IO,
+// links → play.html). Browser = host-p2p.html (WebRTC, no install, links → play-p2p.html).
+(function () {
+  var sb = document.getElementById('modeServerBtn');
+  var bb = document.getElementById('modeBrowserBtn');
+  if (!sb || !bb) return;
+  function paint(mode) {
+    var browser = mode === 'browser';
+    bb.classList.toggle('go', browser);
+    sb.classList.toggle('go', !browser);
+    var n = document.getElementById('modeNote');
+    if (n) n.innerHTML = browser
+      ? 'Browser mode: this tab becomes the server (WebRTC). Links will be <b class="mono">play-p2p.html</b>.'
+      : 'Server mode: runs on the Node timing server (<span class="mono">npm start</span> / Render). Links below will be <b class="mono">play.html</b> (LAN + internet). For zero-install browser hosting, switch to Browser mode — links become <b class="mono">play-p2p.html</b>.';
+  }
+  paint('server');
+  bb.onclick = function () {
+    paint('browser');
+    var mt = document.getElementById('maxTeams');
+    var q = mt ? '?maxTeams=' + encodeURIComponent(mt.value) : '';
+    location.href = '/host-p2p.html' + q;
+  };
+  sb.onclick = function () { paint('server'); };
+})();
+</script>
 </body>
 </html>
