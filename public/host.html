@@ -44,13 +44,13 @@
     <h2 class="ptitle">Open a room</h2>
     <div class="field"><label>Hosting mode — pick before creating</label>
       <div class="btnrow">
-        <button class="btn plain small go" id="modeServerBtn" type="button">Node server · internet + LAN</button>
-        <button class="btn plain small" id="modeBrowserBtn" type="button">Browser · no install</button>
+        <button class="btn plain small" id="modeLanBtn" type="button">LAN · zero delay</button>
+        <button class="btn plain small" id="modeNetBtn" type="button">Internet · Vercel link</button>
       </div>
-      <p class="note" id="modeNote" style="margin:8px 0 0">Server mode: runs on the Node timing server (<span class="mono">npm start</span> / Render). Links below will be <b class="mono">play.html</b> (LAN + internet). For zero-install browser hosting, switch to Browser mode — links become <b class="mono">play-p2p.html</b>.</p>
+      <p class="note" id="modeNote" style="margin:8px 0 0"></p>
     </div>
     <p class="sub">This machine is the timing host. Teams join by code or QR. 8–20 buzzers.</p>
-    <p class="note" id="lanSetupNote" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px">For zero delay, run this page from the event laptop (<span class="mono">npm start</span>, open the <b>http://192.168.…</b> LAN address) — not the Vercel URL. Same Wi-Fi + room code = packets never leave the room. <a href="/lan.html">LAN mode guide</a></p>
+    <p class="note" id="lanSetupNote" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px"><b>LAN mode:</b> open this page from the event laptop over the <b>http://192.168.…</b> address (<span class="mono">npm start</span>) — QR and links stay on event Wi-Fi, zero delay. <b>Internet mode:</b> host from the public Vercel link — QR and links use the Vercel server URL. <a href="/lan.html">LAN guide</a></p>
     <div class="guide">
       <div class="gstep"><b>01</b><span>Create the room — <b>code + QR</b> appear in the side rail</span></div>
       <div class="gstep"><b>02</b><span>Teams check in on their terminals, then <b>Arm</b> each question</span></div>
@@ -97,7 +97,11 @@
         <p class="note deck-hint" style="margin:12px 0 0"><span class="keys">Space</span> arm / lock &nbsp; <span class="keys">N</span> next &nbsp; <span class="keys">R</span> reset &nbsp; <span class="keys">O</span> overlay. Arming clears the previous standings.</p>
       </section>
       <section class="panel" id="joinPanel">
-        <div class="kicker">Team entry · Server mode → <span class="mono">play.html</span> · <span id="lanBadge" class="mono" style="color:var(--go)">LAN — zero delay</span> <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
+        <div class="kicker">Team entry · <span id="lanBadge" class="mono" style="color:var(--go)">LAN — zero delay</span> <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
+        <div class="btnrow" style="margin-bottom:10px">
+          <button class="btn plain small" id="modeLanBtnS" type="button">LAN · zero delay</button>
+          <button class="btn plain small" id="modeNetBtnS" type="button">Internet · Vercel</button>
+        </div>
         <div id="joinSecrets">
           <div class="qrrow">
             <img id="qr" alt="Join QR code"/>
@@ -110,7 +114,7 @@
           <div class="joinlist" id="joinUrls" style="margin-top:10px"></div>
           <p class="note" id="netHint" style="margin:8px 0 0"></p>
           <div id="internetBlock" style="display:none;margin-top:12px;border-top:1px solid var(--line-soft);padding-top:10px">
-            <div class="kicker">Internet fallback · slower</div>
+            <div class="kicker" id="fallbackKicker">Internet fallback · slower</div>
             <div class="joinlist"><span class="prime" id="internetLink">—</span></div>
             <div class="btnrow" style="margin-top:8px"><button class="btn plain small" id="copyNetBtn" type="button">Copy internet link</button></div>
           </div>
@@ -169,32 +173,6 @@
 <canvas id="fx"></canvas>
 <script src="/js/theme.js?v=2"></script>
 <script src="/js/wake.js?v=2"></script>
-<script src="/js/host.js?v=9"></script>
-<script>
-// Mode selector (setup only): both modes coexist. Server = this page (Node/Socket.IO,
-// links → play.html). Browser = host-p2p.html (WebRTC, no install, links → play-p2p.html).
-(function () {
-  var sb = document.getElementById('modeServerBtn');
-  var bb = document.getElementById('modeBrowserBtn');
-  if (!sb || !bb) return;
-  function paint(mode) {
-    var browser = mode === 'browser';
-    bb.classList.toggle('go', browser);
-    sb.classList.toggle('go', !browser);
-    var n = document.getElementById('modeNote');
-    if (n) n.innerHTML = browser
-      ? 'Browser mode: this tab becomes the server (WebRTC). Links will be <b class="mono">play-p2p.html</b>.'
-      : 'Server mode: runs on the Node timing server (<span class="mono">npm start</span> / Render). Links below will be <b class="mono">play.html</b> (LAN + internet). For zero-install browser hosting, switch to Browser mode — links become <b class="mono">play-p2p.html</b>.';
-  }
-  paint('server');
-  bb.onclick = function () {
-    paint('browser');
-    var mt = document.getElementById('maxTeams');
-    var q = mt ? '?maxTeams=' + encodeURIComponent(mt.value) : '';
-    location.href = '/host-p2p.html' + q;
-  };
-  sb.onclick = function () { paint('server'); };
-})();
-</script>
+<script src="/js/host.js?v=10"></script>
 </body>
 </html>

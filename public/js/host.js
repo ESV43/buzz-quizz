@@ -31,6 +31,49 @@ const $ = (id) => document.getElementById(id);
 let roomCode = null, soundOn = true, voiceOn = true, lastWinnerId = null;
 let actx = null;
 
+/* ---------- Hosting mode: LAN vs Internet (picked before creating) ----------
+ * LAN = QR + prime link are the local-network URLs (http://192.168.…, zero
+ * delay — contestants join on event Wi-Fi). Internet = QR + prime link are
+ * the public Vercel server URL (https://…, works over mobile data).
+ * Persisted, switchable anytime; repainted links follow immediately. */
+let hostMode = 'lan';
+try { hostMode = localStorage.getItem('buzz-host-mode') || 'lan'; } catch {}
+if (hostMode !== 'internet') hostMode = 'lan';
+let lastRoomRes = null, lastRoomCode = null;
+function getHostMode() { return hostMode; }
+function setHostMode(m, repaint = true) {
+  hostMode = m === 'internet' ? 'internet' : 'lan';
+  try { localStorage.setItem('buzz-host-mode', hostMode); } catch {}
+  paintModeToggle();
+  if (repaint && lastRoomRes && roomCode) paintJoinSecrets(lastRoomCode || roomCode, lastRoomRes);
+}
+function paintModeToggle() {
+  const lan = hostMode !== 'internet';
+  const pairs = [['modeLanBtn', 'modeNetBtn'], ['modeLanBtnS', 'modeNetBtnS']];
+  for (const [l, n] of pairs) {
+    const lb = $(l), nb = $(n);
+    if (lb) lb.classList.toggle('go', lan);
+    if (nb) nb.classList.toggle('go', !lan);
+  }
+  const note = $('modeNote');
+  if (note) note.innerHTML = lan
+    ? 'LAN mode: QR and links use the <b>local network</b> (http://192.168.…) — contestants join on event Wi-Fi, zero delay.'
+    : 'Internet mode: QR and links use the <b>Vercel server URL</b> (https://…) — contestants join over the internet.';
+}
+function wireModeToggle() {
+  const msg = (lan) => toast(lan ? 'LAN mode — QR + links use the local network' : 'Internet mode — QR + links use the Vercel server');
+  const l = $('modeLanBtn'), n = $('modeNetBtn'), ls = $('modeLanBtnS'), ns = $('modeNetBtnS');
+  if (l) l.onclick = () => { setHostMode('lan'); msg(true); };
+  if (n) n.onclick = () => { setHostMode('internet'); msg(false); };
+  if (ls) ls.onclick = () => { setHostMode('lan'); msg(true); };
+  if (ns) ns.onclick = () => { setHostMode('internet'); msg(false); };
+  paintModeToggle();
+}
+try {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireModeToggle);
+  else wireModeToggle();
+} catch {}
+
 if (new URLSearchParams(location.search).get('present') === '1') document.body.classList.add('present');
 
 /* Screen wake: shared hardened layer (WakeLock + looping video, see js/wake.js).
@@ -219,26 +262,58 @@ function shortHost(u) {
     return p.host + p.pathname + '?room=' + roomCode;
   } catch { return u; }
 }
+function setCompQrFor(url) {
+  const img = $('compQr');
+  if (!img) return;
+  // Server pre-renders one companion QR (for companionUrl). Reuse it when it
+  // matches; otherwise encode via qrserver when online, else hide the image
+  // (the text link + PIN still work offline).
+  if (url && lastRoomRes?.companionQr && lastRoomRes?.companionUrl === url) {
+    img.src = lastRoomRes.companionQr; img.style.display = 'block'; return;
+  }
+  if (url && navigator.onLine !== false) {
+    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(url);
+    img.style.display = 'block';
+  } else if (img) { img.removeAttribute('src'); img.style.display = 'none'; }
+}
 function paintJoinSecrets(code, res) {
-  // LAN-first: the main QR + prime link are always the zero-delay LAN URL.
-  // Internet (https) is shown separately as a slower fallback, if present.
+  // Mode-aware: the primary QR + link follow the hosting mode; the other
+  // mode is shown underneath as a fallback. Contestants scan one QR and land
+  // on the right network — no guessing.
+  lastRoomRes = res; lastRoomCode = code;
+  const lan = getHostMode() !== 'internet';
   const lanUrl = res?.lanUrl || res?.lanJoinUrls?.[0] || null;
   const netUrl = res?.internetUrl || null;
-  const mainQr = res?.lanQr || res?.qr || null;
-  if (mainQr) $('qr').src = mainQr;
+  const primaryUrl = lan ? (lanUrl || netUrl) : (netUrl || lanUrl);
+  const fallbackUrl = lan ? netUrl : lanUrl;
+  const primaryQr = lan ? (res?.lanQr || res?.qr) : (res?.qr || res?.lanQr);
+  if (primaryQr) $('qr').src = primaryQr;
   else if (res?.qr) $('qr').src = res.qr;
-  if (lanUrl) {
-    $('joinLink').textContent = shortHost(lanUrl);
-    $('joinLink').dataset.full = lanUrl;
-    const extra = (res?.lanJoinUrls || []).slice(1, 3);
-    $('joinUrls').innerHTML = extra.map((u) => `<div>${escapeHtml(u)}</div>`).join('');
+  if (primaryUrl) {
+    $('joinLink').textContent = shortHost(primaryUrl);
+    $('joinLink').dataset.full = primaryUrl;
+    const others = (res?.lanJoinUrls || []).filter((u) => u !== primaryUrl).slice(0, 2);
+    $('joinUrls').innerHTML = others.map((u) => `<div>${escapeHtml(u)}</div>`).join('');
     const badge = $('lanBadge');
-    if (badge) badge.textContent = 'LAN — zero delay';
+    if (badge) {
+      badge.textContent = lan ? 'LAN — zero delay' : 'Internet — Vercel';
+      badge.style.color = lan ? 'var(--go)' : '';
+    }
     const cap = $('qrCaption');
-    if (cap) cap.textContent = 'Scan to open the buzzer on event Wi-Fi. Same-network packets only — no internet delay.';
-    $('netHint').textContent = netUrl
-      ? `LAN is live (${(res?.lanIps || []).join(', ') || 'local IP'}). Internet fallback below works over mobile data but adds delay.`
-      : `LAN-only room on ${(res?.lanIps || []).join(', ') || 'this machine'}. Everyone must join the same Wi-Fi.`;
+    if (cap) cap.textContent = lan
+      ? 'Scan to open the buzzer on event Wi-Fi. Same-network packets only — no internet delay.'
+      : 'Scan to open the buzzer over the internet (Vercel server link). Works on mobile data — slower than LAN.';
+    const copyMain = $('copyLanBtn');
+    if (copyMain) copyMain.textContent = lan ? 'Copy LAN link' : 'Copy internet link';
+    if (lan) {
+      $('netHint').textContent = netUrl
+        ? `LAN is live (${(res?.lanIps || []).join(', ') || 'local IP'}). Internet fallback below works over mobile data but adds delay.`
+        : `LAN-only room on ${(res?.lanIps || []).join(', ') || 'this machine'}. Everyone must join the same Wi-Fi.`;
+    } else {
+      $('netHint').textContent = netUrl
+        ? 'Internet link — works over mobile data, not just same Wi-Fi.'
+        : 'No public URL for this server — set PUBLIC_URL or host from the Vercel link. Showing the LAN link instead.';
+    }
   } else if (res?.joinUrls?.length) {
     // legacy server response fallback
     try {
@@ -253,18 +328,30 @@ function paintJoinSecrets(code, res) {
       ? 'Internet link — works over mobile data, not just same Wi-Fi.'
       : 'Same-Wi-Fi link (local IP). Deploy with PUBLIC_URL for internet play.';
   }
+  // Fallback block shows the OTHER mode's link.
   const ib = $('internetBlock');
-  if (netUrl && ib) {
+  const fk = $('fallbackKicker');
+  const copyFb = $('copyNetBtn');
+  if (fallbackUrl && fallbackUrl !== primaryUrl && ib) {
     ib.style.display = 'block';
-    $('internetLink').textContent = netUrl;
-    $('internetLink').dataset.full = netUrl;
+    if (fk) fk.textContent = lan ? 'Internet fallback · slower' : 'LAN fallback · event Wi-Fi';
+    $('internetLink').textContent = fallbackUrl;
+    $('internetLink').dataset.full = fallbackUrl;
+    if (copyFb) copyFb.textContent = lan ? 'Copy internet link' : 'Copy LAN link';
   } else if (ib) ib.style.display = 'none';
-  if (res?.companionUrl) {
+  // Companion remote follows the same mode.
+  const compNetUrl = res?.companionInternetUrl || res?.companionUrl || null;
+  const compLanUrl = (res?.companionLanUrls && res.companionLanUrls[0]) || null;
+  const compPrimary = lan ? (compLanUrl || compNetUrl) : (compNetUrl || compLanUrl);
+  if (compPrimary) {
+    $('companionHint').textContent = compPrimary.replace(/^https?:\/\//, '');
+    $('companionLink').textContent = compPrimary.replace(/^https?:\/\//, '');
+    $('companionLink').dataset.full = compPrimary;
+  } else if (res?.companionUrl) {
     $('companionHint').textContent = res.companionUrl.replace(/^https?:\/\//, '');
     $('companionLink').textContent = res.companionUrl.replace(/^https?:\/\//, '');
   }
-  if (res?.companionQr) { $('compQr').src = res.companionQr; $('compQr').style.display = 'block'; }
-  else { $('compQr').removeAttribute('src'); $('compQr').style.display = 'none'; }
+  setCompQrFor(compPrimary);
 }
 function enterStudio(code, res) {
   roomCode = code;
@@ -273,6 +360,7 @@ function enterStudio(code, res) {
   $('roomCodeStrip').textContent = code.split('').join(' ');
   $('footRoom').textContent = 'room ' + code;
   if (res?.companionPin) $('compPin').textContent = res.companionPin;
+  paintModeToggle();
   paintJoinSecrets(code, res);
   try { localStorage.setItem('buzz-host-code', code); } catch {}
   if (res?.state) renderAll(res);
@@ -296,13 +384,13 @@ try {
   if (_cl) _cl.onclick = () => {
     const full = $('joinLink')?.dataset?.full || $('joinLink')?.textContent || '';
     if (!full || full === '—') return toast('Create a room first');
-    copyText(full, 'LAN link copied — share on event Wi-Fi');
+    copyText(full, getHostMode() === 'internet' ? 'Internet link copied' : 'LAN link copied — share on event Wi-Fi');
   };
   const _cn = $('copyNetBtn');
   if (_cn) _cn.onclick = () => {
     const full = $('internetLink')?.dataset?.full || $('internetLink')?.textContent || '';
-    if (!full || full === '—') return toast('No internet link for this room');
-    copyText(full, 'Internet link copied');
+    if (!full || full === '—') return toast('No fallback link for this room');
+    copyText(full, getHostMode() === 'internet' ? 'LAN link copied — share on event Wi-Fi' : 'Internet link copied');
   };
   const _lg = $('openLanGuide');
   if (_lg) _lg.onclick = () => { location.href = '/lan.html' + (roomCode ? '?room=' + encodeURIComponent(roomCode) : ''); };
