@@ -69,8 +69,11 @@ npm start
 ```
 
 1. On the laptop open the **LAN address** `/host.html` (not the Vercel URL) →
-   Create room. The main QR is the LAN link; the internet `https://` link is
-   shown separately as a slower fallback.
+   pick **LAN mode**, Create room. The main QR is the LAN link; the internet `https://` link is
+   shown separately as a slower fallback. Switch modes anytime — the QR follows.
+   If a phone shows `ERR_CONNECTION_TIMED_OUT` on a `169.254.x.x` link, the laptop
+   never got a venue-Wi-Fi address: rejoin the same Wi-Fi as the phones, then
+   Reclaim the room to refresh the QR (the server never advertises 169.254).
 2. Phones/tablets join the same Wi-Fi, then either scan the LAN QR or open
    `/lan.html`, enter the host address (`192.168.1.20:3000`) + room code →
    Join buzzer / remote / overlay.

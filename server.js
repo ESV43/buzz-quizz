@@ -92,7 +92,17 @@ function localIPs() {
       if (a.family === 'IPv4' && !a.internal) out.push(a.address);
     }
   }
-  return out;
+  // Never advertise link-local (169.254.x.x): it means DHCP failed on that
+  // NIC, and no phone on event Wi-Fi can route to it. A QR encoding it fails
+  // with ERR_CONNECTION_TIMED_OUT on every terminal.
+  const routable = out.filter((ip) => !/^169\.254\./.test(ip));
+  // Most-likely-venue-network first so the QR uses the right NIC when the
+  // laptop has several (Wi-Fi + VPN + VM adapters).
+  const score = (ip) =>
+    /^192\.168\./.test(ip) ? 0
+    : /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 1
+    : /^10\./.test(ip) ? 2 : 3;
+  return routable.sort((a, b) => score(a) - score(b));
 }
 function isPublicHost(host) {
   if (!host) return false;
@@ -102,6 +112,7 @@ function isPublicHost(host) {
   if (/^10\./.test(h)) return false;
   if (/^192\.168\./.test(h)) return false;
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
+  if (/^169\.254\./.test(h)) return false; // link-local: never a public URL
   return true;
 }
 /** Base URL players should open, derived per-socket so Vercel needs no config. */
@@ -124,9 +135,11 @@ function splitLinks(socket, code, page = 'play.html') {
   const base = publicBase(socket);
   const internetUrl = base ? `${base}/${page}?room=${code}` : null;
   const lanJoinUrls = localIPs().map((ip) => `http://${ip}:${PORT}/${page}?room=${code}`);
-  if (!lanJoinUrls.length) lanJoinUrls.push(`http://localhost:${PORT}/${page}?room=${code}`);
+  // localhost is only useful on the host machine itself — never let it become
+  // the QR. It stays as a last-resort list entry for solo testing.
   const joinUrls = [...(internetUrl ? [internetUrl] : []), ...lanJoinUrls];
-  return { internetUrl, lanJoinUrls, joinUrls };
+  if (!joinUrls.length) joinUrls.push(`http://localhost:${PORT}/${page}?room=${code}`);
+  return { internetUrl, lanJoinUrls, joinUrls, lanOk: lanJoinUrls.length > 0 };
 }
 function joinLinks(socket, code) {
   return splitLinks(socket, code, 'play.html').joinUrls;
@@ -148,6 +161,7 @@ async function lanPayload(socket, code) {
     joinUrls: play.joinUrls,
     internetUrl: play.internetUrl,
     lanJoinUrls: play.lanJoinUrls,
+    lanOk: play.lanOk,
     lanUrl: lanQr,
     qr,
     lanQr: lanQrData,
@@ -726,6 +740,11 @@ loadRooms();
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  BUZZ ARENA live on :${PORT}`);
   if (PUBLIC_URL) console.log(`  Public URL: ${PUBLIC_URL}`);
-  for (const ip of localIPs()) console.log(`  LAN (zero-delay): http://${ip}:${PORT}  (room code joins here)`);
+  const lan = localIPs();
+  if (!lan.length) {
+    console.log(`  WARNING: no event-Wi-Fi address found (only link-local/loopback).`);
+    console.log(`  Join the venue Wi-Fi on this machine first — phones cannot reach 169.254.x.x links.`);
+  }
+  for (const ip of lan) console.log(`  LAN (zero-delay): http://${ip}:${PORT}  (room code joins here)`);
   console.log(`  LAN discovery: GET /api/info`);
 });

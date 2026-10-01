@@ -5,9 +5,9 @@ echo "=== Buzz Arena starting ==="
 # free port if a previous run is stuck
 fuser -k 3000/tcp 2>/dev/null
 sleep 1
-# show LAN IPs for phones
+# show LAN IPs for phones (skip link-local 169.254.x.x — phones can't reach it)
 echo "LAN IPs:"
-ip -4 addr show | grep -oP '(?<=inet\s)\d+\.\d+\.\d+\.\d+' | grep -v "127.0.0.1"
+ip -4 addr show | grep -oP '(?<=inet\s)\d+\.\d+\.\d+\.\d+' | grep -v "127.0.0.1" | grep -v "^169\.254\." || echo "(none — join Wi-Fi first: only link-local found)"
 echo ""
 echo "Host screen: http://localhost:3000/host.html"
 echo "Players use: http://<LAN-IP>:3000/play.html?room=CODE (shown on host screen)"

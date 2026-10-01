@@ -306,7 +306,10 @@ function paintJoinSecrets(code, res) {
     const copyMain = $('copyLanBtn');
     if (copyMain) copyMain.textContent = lan ? 'Copy LAN link' : 'Copy internet link';
     if (lan) {
-      $('netHint').textContent = netUrl
+      if (res && res.lanOk === false) {
+        $('netHint').textContent = 'No event-Wi-Fi address on this server — this laptop is not on venue Wi-Fi (a 169.254 link never loads on phones: ERR_CONNECTION_TIMED_OUT). Join the same Wi-Fi as the phones, then Reclaim the room to refresh the QR.';
+        toast('No LAN address — join venue Wi-Fi, then Reclaim');
+      } else $('netHint').textContent = netUrl
         ? `LAN is live (${(res?.lanIps || []).join(', ') || 'local IP'}). Internet fallback below works over mobile data but adds delay.`
         : `LAN-only room on ${(res?.lanIps || []).join(', ') || 'this machine'}. Everyone must join the same Wi-Fi.`;
     } else {
