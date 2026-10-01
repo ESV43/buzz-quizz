@@ -87,6 +87,11 @@ button{font-family:inherit}
 .btn.go:hover{background:#45dd8b}
 .btn.plain{background:transparent}
 .btn.plain:hover{border-color:#3a424c}
+/* Selected mode toggle: .plain comes later than .go at equal specificity and
+ * would wipe the green fill (leaving dark text on a dark button). This rule
+ * wins by specificity so the active choice always reads as a filled button. */
+.btn.plain.go{background:var(--go); border-color:var(--go); color:#06130c}
+.btn.plain.go:hover{background:#45dd8b; border-color:#45dd8b}
 .btn.warn{color:#ef6b71; border-color:#4a2326}
 .btn.warn:hover{background:#1d1113}
 .btn.small{padding:10px 6px; font-size:11px; letter-spacing:.08em; white-space:nowrap; text-overflow:ellipsis}
@@ -395,6 +400,7 @@ body.light .btn:hover{border-color:#b0b0b8}
 body.light .btn.go{background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 4px 14px rgba(0,113,227,.28)}
 body.light .btn.go:hover{background:#0077ed}
 body.light .btn.plain{background:#fff}
+body.light .btn.plain.go{background:var(--accent); border-color:var(--accent); color:#fff}
 body.light .btn.warn{color:var(--stop); border-color:#f0b9be}
 body.light .btn.warn:hover{background:#fdf0f1}
 body.light .btn.confirm{border-color:var(--stop); color:var(--stop)}

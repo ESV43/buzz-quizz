@@ -255,6 +255,16 @@
       store.kick(b.dataset.kick);
       renderLan(store.publicTeams(), store.publicState());
     });
+    // Projector privacy: hide QR codes + links (same as the Internet studio).
+    var ht = $('toggleJoinVisL');
+    if (ht) ht.onclick = function () {
+      var sec = $('joinSecretsL'), note = $('joinMaskedNoteL');
+      var hidden = sec.style.display !== 'none';
+      sec.style.display = hidden ? 'none' : '';
+      if (note) note.style.display = hidden ? 'block' : 'none';
+      ht.textContent = hidden ? 'Show' : 'Hide';
+      if (hidden) toast('Team codes hidden from projector');
+    };
     var end = $('endRoomBtnL');
     if (end) end.onclick = function () {
       if (!store) return;

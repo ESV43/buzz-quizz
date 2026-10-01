@@ -105,7 +105,6 @@
             <div>
               <div class="note" id="qrCaption">Scan to open the buzzer, or type the address. LAN link is fastest — same Wi-Fi, no internet.</div>
               <div class="joinlist" style="margin-top:8px"><span class="prime" id="joinLink">—</span></div>
-              <div class="btnrow" style="margin-top:8px"><button class="btn plain small" id="copyLanBtn" type="button">Copy LAN link</button><button class="btn plain small" id="openLanGuide" type="button">LAN guide</button></div>
             </div>
           </div>
           <div class="joinlist" id="joinUrls" style="margin-top:10px"></div>
@@ -189,7 +188,8 @@
         </div>
       </section>
       <section class="panel">
-        <div class="kicker">Team entry · LAN room — code only</div>
+        <div class="kicker">Team entry · LAN room — code only <button class="mini-toggle" id="toggleJoinVisL" title="Hide QR + links from projector">Hide</button></div>
+        <div id="joinSecretsL">
         <div class="qrrow">
           <img id="qrL" alt="Join QR code"/>
           <div>
@@ -206,6 +206,8 @@
             <div class="joinlist" style="margin-top:8px"><span class="prime" id="companionLinkL">—</span></div>
           </div>
         </div>
+        </div>
+        <p class="note masked-note" id="joinMaskedNoteL" style="display:none">Codes hidden from projector. Press Show to reveal.</p>
       </section>
     </aside>
 
