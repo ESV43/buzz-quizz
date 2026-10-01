@@ -742,8 +742,8 @@ server.listen(PORT, '0.0.0.0', () => {
   if (PUBLIC_URL) console.log(`  Public URL: ${PUBLIC_URL}`);
   const lan = localIPs();
   if (!lan.length) {
-    console.log(`  WARNING: no event-Wi-Fi address found (only link-local/loopback).`);
-    console.log(`  Join the venue Wi-Fi on this machine first — phones cannot reach 169.254.x.x links.`);
+    console.log(`  WARNING: this laptop has no usable Wi-Fi address (only link-local/loopback).`);
+    console.log(`  Connect it to a Wi-Fi network first — contestants join whatever Wi-Fi this laptop is on.`);
   }
   for (const ip of lan) console.log(`  LAN (zero-delay): http://${ip}:${PORT}  (room code joins here)`);
   console.log(`  LAN discovery: GET /api/info`);

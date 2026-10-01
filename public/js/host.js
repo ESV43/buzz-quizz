@@ -57,7 +57,7 @@ function paintModeToggle() {
   }
   const note = $('modeNote');
   if (note) note.innerHTML = lan
-    ? 'LAN mode: QR and links use the <b>local network</b> (http://192.168.…) — contestants join on event Wi-Fi, zero delay.'
+    ? 'LAN mode: QR and links use <b>this laptop\u2019s Wi-Fi address</b> — connect all contestant phones to the same Wi-Fi this laptop is on, then share the QR.'
     : 'Internet mode: QR and links use the <b>Vercel server URL</b> (https://…) — contestants join over the internet.';
 }
 function wireModeToggle() {
@@ -286,6 +286,28 @@ function paintJoinSecrets(code, res) {
   const netUrl = res?.internetUrl || null;
   const primaryUrl = lan ? (lanUrl || netUrl) : (netUrl || lanUrl);
   const fallbackUrl = lan ? netUrl : lanUrl;
+  // Dead LAN: laptop has no usable Wi-Fi address and there is no internet URL
+  // either — any QR shown here (localhost, 169.254) could never load on a
+  // phone. Show the fix-it steps instead of a broken QR.
+  if (lan && res && res.lanOk === false && !netUrl) {
+    const qrImg = $('qr');
+    if (qrImg) qrImg.style.display = 'none';
+    $('joinLink').textContent = '—';
+    $('joinLink').dataset.full = '';
+    $('joinUrls').innerHTML = '';
+    const badge0 = $('lanBadge');
+    if (badge0) { badge0.textContent = 'LAN — no address'; badge0.style.color = 'var(--stop)'; }
+    const cap0 = $('qrCaption');
+    if (cap0) cap0.textContent = 'No QR until this laptop has a Wi-Fi address.';
+    $('netHint').textContent = 'This laptop has no usable Wi-Fi address right now (only a 169.254 self-assigned one, which phones can never load). Connect this laptop to a Wi-Fi network — venue router or a phone hotspot — then connect all contestant phones to that same network, and press Reclaim below to get a working QR.';
+    toast('No Wi-Fi address on this laptop — connect it to Wi-Fi first');
+    const ib0 = $('internetBlock');
+    if (ib0) ib0.style.display = 'none';
+    setCompQrFor(null);
+    return;
+  }
+  const qrImg0 = $('qr');
+  if (qrImg0) qrImg0.style.display = '';
   const primaryQr = lan ? (res?.lanQr || res?.qr) : (res?.qr || res?.lanQr);
   if (primaryQr) $('qr').src = primaryQr;
   else if (res?.qr) $('qr').src = res.qr;
@@ -301,17 +323,17 @@ function paintJoinSecrets(code, res) {
     }
     const cap = $('qrCaption');
     if (cap) cap.textContent = lan
-      ? 'Scan to open the buzzer on event Wi-Fi. Same-network packets only — no internet delay.'
+      ? 'Scan to open the buzzer — first join the same Wi-Fi this laptop is on. Same-network packets only, no internet delay.'
       : 'Scan to open the buzzer over the internet (Vercel server link). Works on mobile data — slower than LAN.';
     const copyMain = $('copyLanBtn');
     if (copyMain) copyMain.textContent = lan ? 'Copy LAN link' : 'Copy internet link';
     if (lan) {
       if (res && res.lanOk === false) {
-        $('netHint').textContent = 'No event-Wi-Fi address on this server — this laptop is not on venue Wi-Fi (a 169.254 link never loads on phones: ERR_CONNECTION_TIMED_OUT). Join the same Wi-Fi as the phones, then Reclaim the room to refresh the QR.';
-        toast('No LAN address — join venue Wi-Fi, then Reclaim');
+        $('netHint').textContent = 'This laptop has no usable Wi-Fi address right now (only a 169.254 self-assigned one, which phones can never load). Connect this laptop to a Wi-Fi network — venue router or a phone hotspot — then connect all contestant phones to that same network, and Reclaim the room to refresh the QR.';
+        toast('No Wi-Fi address on this laptop — connect it to Wi-Fi first');
       } else $('netHint').textContent = netUrl
-        ? `LAN is live (${(res?.lanIps || []).join(', ') || 'local IP'}). Internet fallback below works over mobile data but adds delay.`
-        : `LAN-only room on ${(res?.lanIps || []).join(', ') || 'this machine'}. Everyone must join the same Wi-Fi.`;
+        ? `Hosting on ${(res?.lanIps || []).join(', ') || 'local IP'} — connect all phones to the same Wi-Fi this laptop is on, then share the QR. Internet fallback below works over mobile data but adds delay.`
+        : `Hosting on ${(res?.lanIps || []).join(', ') || 'this machine'} — connect all phones to the same Wi-Fi this laptop is on, then share the QR.`;
     } else {
       $('netHint').textContent = netUrl
         ? 'Internet link — works over mobile data, not just same Wi-Fi.'
