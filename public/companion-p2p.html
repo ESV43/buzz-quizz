@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Quizmaster · LAN room — QSI</title>
+<link rel="stylesheet" href="/css/arena.css?v=17"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="/js/p2p.js?v=2"></script>
+<script src="/js/theme.js?v=2"></script>
+<script src="/js/wake.js?v=2"></script>
+<meta name="theme-color" content="#0a0c0e"/>
+</head>
+<body>
+<div class="wrap" style="max-width:480px">
+  <header class="strip">
+    <div class="cell">
+      <div class="brandline"><img class="brandlogo" src="/qsi.jpg?v=1" alt="QSI"/><span class="brandname">QSI</span></div>
+      <span class="k">Quizmaster · LAN room</span>
+    </div>
+    <div class="cell hact"><button class="theme-toggle" data-theme-btn type="button">Light</button></div>
+  </header>
+
+  <div class="panel" id="lockCard" style="margin-top:26px">
+    <div class="kicker">Authentication · LAN room</div>
+    <h2 class="ptitle">Quizmaster access</h2>
+    <p class="sub">Room code plus the PIN from the host screen. No addresses — you join the host tab directly over Wi-Fi.</p>
+    <div class="field"><label>Room code</label><input id="code" class="code" placeholder="·····" maxlength="5" autocomplete="off"/></div>
+    <div class="field"><label>PIN</label><input id="pin" class="code" placeholder="····" inputmode="numeric" maxlength="4" autocomplete="off"/></div>
+    <div class="btnrow" style="margin-top:16px"><button class="btn go" id="unlock">Unlock remote</button></div>
+    <p class="err" id="err"></p>
+    <p class="note">Internet room instead? <a href="/companion.html">Open the server remote</a>.</p>
+  </div>
+
+  <div id="remote" style="display:none">
+    <div class="panel" style="margin-top:26px; text-align:center">
+      <div class="kicker" id="st">Standby</div>
+      <div style="font-family:var(--fd); font-weight:800; font-size:26px; margin:6px 0" id="winner">—</div>
+      <div id="mini" style="text-align:left; margin-top:8px"></div>
+    </div>
+    <div class="panel" style="margin-top:12px">
+      <div class="kicker">Control surface · LAN room</div>
+      <button class="btn go" id="arm" style="padding:18px">Arm buzzer</button>
+      <div class="btnrow" style="margin-top:8px">
+        <button class="btn plain" id="lock">Lock</button>
+        <button class="btn plain" id="next">Next</button>
+      </div>
+      <div class="btnrow" style="margin-top:8px"><button class="btn warn" id="reset">Reset</button></div>
+      <p class="note" style="margin:12px 0 0">Arming clears standings and opens a new question. Display stays awake while unlocked.</p>
+      <div class="btnrow" style="margin-top:10px"><button class="btn plain small" id="bye">Disconnect</button></div>
+    </div>
+  </div>
+
+  <footer>QSI · LAN remote</footer>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function toast(m) { var t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, 2400); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]); }); }
+  try {
+    var q = new URLSearchParams(location.search).get('room');
+    $('code').value = (q || localStorage.getItem('buzz-room') || '').toUpperCase();
+  } catch (e) {}
+  try { if (window.BuzzWake) window.BuzzWake.keepAwake(); } catch (e) {}
+
+  var peer = null, link = null, roomCode = null;
+
+  $('unlock').onclick = async function () {
+    var code = $('code').value.trim().toUpperCase(), pin = $('pin').value.trim();
+    if (!/^[A-Z0-9]{4,6}$/.test(code)) { $('err').textContent = 'Enter the room code from the host display.'; return; }
+    if (!pin) { $('err').textContent = 'Enter the PIN from the host display.'; return; }
+    $('unlock').disabled = true;
+    $('err').textContent = '';
+    var okLib = await window.BuzzP2P.ensurePeerJs();
+    if (!okLib) { $('err').textContent = 'WebRTC blocked — check internet once, then retry.'; $('unlock').disabled = false; return; }
+    try { peer = new Peer({ debug: 0 }); }
+    catch (e) { $('err').textContent = 'Browser blocked WebRTC — use Chrome / Safari.'; $('unlock').disabled = false; return; }
+    peer.on('error', function () { $('err').textContent = 'Link notice — retrying…'; });
+    peer.on('open', function () {
+      var conn = peer.connect(window.BuzzP2P.roomToPeerId(code), { reliable: true });
+      conn.on('open', async function () {
+        link = window.BuzzP2P.wrapConn(conn, onHost);
+        var res = await link.request('join-as-companion', { code: code, pin: pin }, 9000);
+        $('unlock').disabled = false;
+        if (!res || !res.ok) { $('err').textContent = (res && res.error) || 'Host not found — same Wi-Fi? Host tab open?'; return; }
+        roomCode = code;
+        try { localStorage.setItem('buzz-room', code); } catch (e2) {}
+        $('lockCard').style.display = 'none';
+        $('remote').style.display = 'block';
+        try { if (window.BuzzWake) window.BuzzWake.keepAwake(); } catch (e3) {}
+        paint(res.state);
+        toast('Remote unlocked');
+      });
+      conn.on('close', function () { toast('Link lost — reopen the remote'); });
+    });
+  };
+
+  function ctl(a) {
+    if (!link) { toast('Not linked — unlock first'); return; }
+    link.request('companion-control', { action: a }, 8000).then(function (r) {
+      if (!r || !r.ok) { toast((r && r.error) || 'Blocked'); return; }
+      try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+      if (r.state) paint(r.state);
+    });
+  }
+  $('arm').onclick = function () { ctl('arm'); };
+  $('lock').onclick = function () { ctl('lock'); };
+  $('next').onclick = function () { ctl('next'); };
+  $('reset').onclick = function () { ctl('reset'); };
+  $('bye').onclick = function () { location.reload(); };
+
+  function onHost(msg) {
+    if (!msg || !msg.t) return;
+    if (msg.t === 'room-update' || msg.t === 'buzz-update') paint(msg.state || msg);
+    else if (msg.t === 'room-closed') { toast('Room closed by host'); setTimeout(function () { location.reload(); }, 1200); }
+    else if (msg.t === 'kicked') { /* roster-only */ }
+  }
+  function paint(state) {
+    if (!state) return;
+    var buzzes = state.buzzes || [];
+    $('st').textContent = 'Q' + (state.questionNo || '–') + ' · ' + (state.armed ? 'Live' : 'Locked') + ' · ' + buzzes.length + ' presses';
+    var w = buzzes[0];
+    $('winner').textContent = w ? (w.teamName + ' · +' + w.deltaMs + ' ms') : 'Awaiting press';
+    $('mini').innerHTML = buzzes.length
+      ? buzzes.slice(0, 5).map(function (b) {
+          return '<div class="orow"><span class="mono">P' + b.rank + '</span><span>' + esc(b.teamName) + '</span><span class="mono">+' + b.deltaMs + '</span></div>';
+        }).join('')
+      : '<p class="note" style="text-align:center">No presses.</p>';
+  }
+})();
+</script>
+</body>
+</html>

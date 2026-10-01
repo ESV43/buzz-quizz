@@ -42,86 +42,37 @@ const params = new URLSearchParams(location.search);
 if (params.get('room')) $('roomInput').value = params.get('room').toUpperCase();
 try { $('roomInput').value ||= localStorage.getItem('buzz-room') || ''; $('nameInput').value ||= localStorage.getItem('buzz-name') || ''; } catch {}
 
-/* ---------- LAN mode bar (room-code + LAN-host join) ---------- */
-let lanMode = 'internet';
-try {
-  const L0 = window.BuzzLan;
-  if (L0) {
-    const s0 = L0.normalizeServer(L0.getSavedServer() || lanServer || params.get('server') || '');
-    if (s0 && s0.indexOf('http://') === 0) lanMode = 'lan';
-    else if ((L0.getSavedMode() || '') === 'lan' && s0) lanMode = 'lan';
-  }
-} catch {}
-function paintLanMode() {
+/* ---------- Room type: Internet (server) vs LAN (P2P, host tab referees) ----
+ * LAN rooms need no address — the same code box joins the host tab directly
+ * over Wi-Fi (play-p2p.html). The ?server= override below still points the
+ * Internet flow at a chosen timing server (e.g. Render). */
+let playJoinMode = 'internet';
+try { playJoinMode = localStorage.getItem('buzz-play-mode') || 'internet'; } catch {}
+if (playJoinMode !== 'lan') playJoinMode = 'internet';
+function paintPlayMode() {
   try {
-    const tag = $('lanModeTag');
-    if (tag) tag.textContent = lanMode === 'lan' ? 'LAN · zero delay' : 'Internet';
-    const f = $('lanFields');
-    if (f) f.style.display = lanMode === 'lan' ? 'block' : 'none';
-    const mi = $('modeInternet'), ml = $('modeLan');
-    if (mi) mi.classList.toggle('go', lanMode !== 'lan');
-    if (ml) ml.classList.toggle('go', lanMode === 'lan');
-    // redirect banner: only when a LAN host is known AND this page can't reach it
-    const L = window.BuzzLan;
-    const srv = (L && (L.normalizeServer(($('lanServerInput')?.value || '') || lanServer || L.getSavedServer() || ''))) || '';
-    const bar = $('lanRedirectBar');
-    if (bar) {
-      const blocked = !!(L && srv && L.isBlockedByMixedContent(srv) && !L.isSameOrigin(srv));
-      bar.style.display = blocked ? 'block' : 'none';
-      const btn = $('lanRedirectBtn');
-      if (btn && blocked) {
-        btn.onclick = () => {
-          const room = ($('roomInput')?.value || params.get('room') || '').toUpperCase().trim();
-          L.setSavedServer(srv); L.setSavedMode('lan');
-          L.goLan(srv, 'play.html', room || undefined);
-        };
-      }
-    }
+    const tag = $('playModeTag');
+    if (tag) tag.textContent = playJoinMode === 'lan' ? 'LAN · P2P' : 'Internet';
+    const mi = $('playModeInternet'), ml = $('playModeLan');
+    if (mi) mi.classList.toggle('go', playJoinMode !== 'lan');
+    if (ml) ml.classList.toggle('go', playJoinMode === 'lan');
+    const note = $('playModeNote');
+    if (note) note.textContent = playJoinMode === 'lan'
+      ? 'LAN room: just the code — you join the host tab directly over Wi-Fi. No addresses, no install.'
+      : 'Internet room: code works on the timing server.';
   } catch {}
 }
-function initLanBar() {
+function initPlayMode() {
   try {
-    const L = window.BuzzLan;
-    if (!L) return;
-    const input = $('lanServerInput');
-    const pre = L.normalizeServer(params.get('server') || L.getSavedServer() || lanServer || '') || '';
-    if (input && pre) input.value = pre.replace(/^https?:\/\//, '');
-    if (pre && pre.indexOf('http://') === 0) lanMode = 'lan';
-    const mi = $('modeInternet'), ml = $('modeLan');
-    if (mi) mi.onclick = () => { lanMode = 'internet'; L.setSavedMode('internet'); paintLanMode(); toast('Internet mode — join with the https link'); };
-    if (ml) ml.onclick = () => { lanMode = 'lan'; L.setSavedMode('lan'); paintLanMode(); try { input?.focus(); } catch {} };
-    const test = $('lanTestBtn');
-    if (test) test.onclick = async () => {
-      const srv = L.normalizeServer(input?.value || '');
-      if (!srv) { $('lanStatus').textContent = 'Enter the host address, e.g. 192.168.1.20:3000'; return; }
-      $('lanStatus').textContent = 'Probing ' + srv + ' …';
-      test.disabled = true;
-      const r = await L.testServer(srv, 3000);
-      test.disabled = false;
-      if (r.ok) { $('lanStatus').textContent = `Host reachable — ${r.ms} ms. Tap “Open LAN version”, then join with the room code.`; L.setSavedServer(srv); L.setSavedMode('lan'); lanServer = srv; }
-      else $('lanStatus').textContent = r.error || 'Unreachable.';
-      paintLanMode();
-    };
-    const open = $('lanOpenBtn');
-    if (open) open.onclick = () => {
-      const srv = L.normalizeServer(input?.value || '');
-      if (!srv) { $('lanStatus').textContent = 'Enter the host address first.'; return; }
-      L.setSavedServer(srv); L.setSavedMode('lan');
-      const room = ($('roomInput')?.value || '').toUpperCase().trim();
-      L.goLan(srv, 'play.html', room || undefined);
-    };
-    if (input) input.addEventListener('input', () => { lanServer = L.normalizeServer(input.value) || lanServer; paintLanMode(); });
-    if (input) input.addEventListener('change', () => {
-      const srv = L.normalizeServer(input.value);
-      if (srv) { L.setSavedServer(srv); lanServer = srv; }
-      paintLanMode();
-    });
-    paintLanMode();
+    const mi = $('playModeInternet'), ml = $('playModeLan');
+    if (mi) mi.onclick = () => { playJoinMode = 'internet'; try { localStorage.setItem('buzz-play-mode', 'internet'); } catch {} paintPlayMode(); };
+    if (ml) ml.onclick = () => { playJoinMode = 'lan'; try { localStorage.setItem('buzz-play-mode', 'lan'); } catch {} paintPlayMode(); toast('LAN room — join with just the code'); };
+    paintPlayMode();
   } catch {}
 }
 try {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initLanBar);
-  else initLanBar();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPlayMode);
+  else initPlayMode();
 } catch {}
 
 function toast(m) { const t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2400); }
@@ -353,16 +304,16 @@ $('joinBtn').onclick = () => {
   roomCode = $('roomInput').value.trim().toUpperCase();
   const teamName = $('nameInput').value.trim() || 'Team';
   if (roomCode.length < 4) return $('joinErr').textContent = 'Enter the 5-letter code from the host display.';
-  // LAN mode: hop onto the LAN origin first so buzz packets never touch the internet.
-  try {
-    const L = window.BuzzLan;
-    if (L && lanMode === 'lan') {
-      const srv = L.normalizeServer($('lanServerInput')?.value || lanServer || L.getSavedServer() || '');
-      if (!srv) { $('joinErr').textContent = 'LAN mode: enter the host address first (e.g. 192.168.1.20:3000).'; return; }
-      L.setSavedServer(srv); L.setSavedMode('lan');
-      if (!L.isSameOrigin(srv)) { L.goLan(srv, 'play.html', roomCode); return; }
-    }
-  } catch {}
+  // LAN·P2P room: no addresses — hand off to the P2P terminal, which joins
+  // the host tab directly over Wi-Fi.
+  if (playJoinMode === 'lan') {
+    try {
+      localStorage.setItem('buzz-room', roomCode);
+      if (teamName) localStorage.setItem('buzz-name', teamName);
+    } catch {}
+    location.href = '/play-p2p.html?room=' + encodeURIComponent(roomCode);
+    return;
+  }
   if (!socket.connected) { try { socket.connect(); } catch {} }
   $('joinBtn').disabled = true;
   const attempt = (retried = false) => {
@@ -377,8 +328,8 @@ $('joinBtn').onclick = () => {
         let msg = res?.error || 'Join failed — check code and connection, then retry.';
         try {
           if (err && window.BuzzLan?.isHttpsPage() && /vercel|netlify/i.test(location.host)) {
-            msg = 'This internet page has no timing server. Use LAN mode below: enter the host IP + room code, then “Open LAN version”.';
-            lanMode = 'lan'; paintLanMode();
+            msg = 'This page has no timing server. If yours is a LAN room (host tab referees), switch to “LAN · P2P” above and join with just the code.';
+            playJoinMode = 'lan'; paintPlayMode();
           }
         } catch {}
         $('joinErr').textContent = msg;

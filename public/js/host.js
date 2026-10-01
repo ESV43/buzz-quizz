@@ -31,42 +31,40 @@ const $ = (id) => document.getElementById(id);
 let roomCode = null, soundOn = true, voiceOn = true, lastWinnerId = null;
 let actx = null;
 
-/* ---------- Hosting mode: LAN vs Internet (picked before creating) ----------
- * LAN = QR + prime link are the local-network URLs (http://192.168.…, zero
- * delay — contestants join on event Wi-Fi). Internet = QR + prime link are
- * the public Vercel server URL (https://…, works over mobile data).
- * Persisted, switchable anytime; repainted links follow immediately. */
+/* ---------- Hosting mode: LAN (P2P) vs Internet (server) --------------------
+ * Picked in setup before creating. LAN = this tab is the referee over Wi-Fi
+ * (WebRTC, no install, no addresses — see js/host-lan.js, studioLan).
+ * Internet = the room lives on the timing server over socket.io (studioNet).
+ * Persisted. The socket studio below only runs in Internet mode. */
 let hostMode = 'lan';
 try { hostMode = localStorage.getItem('buzz-host-mode') || 'lan'; } catch {}
 if (hostMode !== 'internet') hostMode = 'lan';
 let lastRoomRes = null, lastRoomCode = null;
 function getHostMode() { return hostMode; }
-function setHostMode(m, repaint = true) {
+function setHostMode(m) {
   hostMode = m === 'internet' ? 'internet' : 'lan';
   try { localStorage.setItem('buzz-host-mode', hostMode); } catch {}
   paintModeToggle();
-  if (repaint && lastRoomRes && roomCode) paintJoinSecrets(lastRoomCode || roomCode, lastRoomRes);
 }
 function paintModeToggle() {
   const lan = hostMode !== 'internet';
-  const pairs = [['modeLanBtn', 'modeNetBtn'], ['modeLanBtnS', 'modeNetBtnS']];
-  for (const [l, n] of pairs) {
-    const lb = $(l), nb = $(n);
-    if (lb) lb.classList.toggle('go', lan);
-    if (nb) nb.classList.toggle('go', !lan);
-  }
+  const lb = $('modeLanBtn'), nb = $('modeNetBtn');
+  if (lb) lb.classList.toggle('go', lan);
+  if (nb) nb.classList.toggle('go', !lan);
   const note = $('modeNote');
   if (note) note.innerHTML = lan
-    ? 'LAN mode: QR and links use <b>this laptop\u2019s Wi-Fi address</b> — connect all contestant phones to the same Wi-Fi this laptop is on, then share the QR.'
-    : 'Internet mode: QR and links use the <b>Vercel server URL</b> (https://…) — contestants join over the internet.';
+    ? 'LAN mode: <b>no install, no addresses</b> — this tab becomes the referee over Wi-Fi. Everyone loads the site once, then buzzes stay on the local network.'
+    : 'Internet mode: the room lives on the <b>timing server</b> — QR holds the server link, works over mobile data.';
+  const rr = $('reclaimRow'), rb = $('reclaimBtns'), rn = $('reclaimNote');
+  if (rr) rr.style.display = lan ? 'none' : '';
+  if (rb) rb.style.display = lan ? 'none' : '';
+  if (rn) rn.style.display = lan ? 'block' : 'none';
 }
 function wireModeToggle() {
-  const msg = (lan) => toast(lan ? 'LAN mode — QR + links use the local network' : 'Internet mode — QR + links use the Vercel server');
-  const l = $('modeLanBtn'), n = $('modeNetBtn'), ls = $('modeLanBtnS'), ns = $('modeNetBtnS');
+  const msg = (lan) => toast(lan ? 'LAN mode — this tab will host over Wi-Fi' : 'Internet mode — room will live on the server');
+  const l = $('modeLanBtn'), n = $('modeNetBtn');
   if (l) l.onclick = () => { setHostMode('lan'); msg(true); };
   if (n) n.onclick = () => { setHostMode('internet'); msg(false); };
-  if (ls) ls.onclick = () => { setHostMode('lan'); msg(true); };
-  if (ns) ns.onclick = () => { setHostMode('internet'); msg(false); };
   paintModeToggle();
 }
 try {
@@ -186,6 +184,7 @@ function fxTick() {
 }
 
 async function probe() {
+  if (window.__p2pActive) return; // LAN·P2P room owns the header pill
   if (!socket.connected) return;
   const t0 = performance.now();
   try {
@@ -209,7 +208,7 @@ socket.on('connect', () => {
   if (wasOffline) { wasOffline = false; toast('Link restored'); }
   // socket.id changed on reconnect — old hostId is dead, so silently reclaim
   // authority (otherwise arm/kick fail with "Not authorized").
-  if (roomCode && $('studio').style.display !== 'none') {
+  if (roomCode && $('studioNet').style.display !== 'none') {
     socket.emit('host-rejoin', { code: roomCode }, (res) => {
       if (!res?.ok) return toast(res?.error || 'Host session lost — reclaim the room');
       enterStudio(res.code || roomCode, res);
@@ -228,6 +227,13 @@ function reclaimOnce(retry) {
 setInterval(probe, 10000);
 
 $('createBtn').onclick = () => {
+  if (getHostMode() !== 'internet') {
+    // LAN·P2P: this tab becomes the referee (no server). See js/host-lan.js.
+    if (window.BuzzLanHost && typeof window.BuzzLanHost.createRoom === 'function') {
+      window.BuzzLanHost.createRoom(parseInt($('maxTeams').value, 10) || 16);
+    } else toast('LAN engine still loading — retry in a second');
+    return;
+  }
   socket.emit('create-room', { maxTeams: parseInt($('maxTeams').value, 10) }, (res) => {
     if (!res?.ok) return toast('Could not create room');
     enterStudio(res.code, res);
@@ -380,7 +386,7 @@ function paintJoinSecrets(code, res) {
 }
 function enterStudio(code, res) {
   roomCode = code;
-  $('setup').style.display = 'none'; $('studio').style.display = 'grid';
+  $('setup').style.display = 'none'; $('studioNet').style.display = 'grid';
   $('roomCode').textContent = code;
   $('roomCodeStrip').textContent = code.split('').join(' ');
   $('footRoom').textContent = 'room ' + code;
@@ -588,7 +594,7 @@ function exitToSetup(msg) {
   try { localStorage.removeItem('buzz-host-code'); } catch {}
   try {
     document.body.classList.remove('present');
-    $('studio').style.display = 'none'; $('setup').style.display = 'block';
+    $('studioNet').style.display = 'none'; $('setup').style.display = 'block';
   } catch {}
   if (msg) toast(msg);
 }
@@ -624,7 +630,7 @@ $('announceBtn').onclick = () => {
   else toast('No winner to announce yet');
 };
 document.addEventListener('keydown', (e) => {
-  if ($('studio').style.display === 'none') return;
+  if ($('studioNet').style.display === 'none') return;
   if (e.code === 'Space') { e.preventDefault(); control($('stateWord').classList.contains('live') ? 'lock' : 'arm'); }
   else if (e.key === 'a' || e.key === 'A') control('arm');
   else if (e.key === 'l' || e.key === 'L') control('lock');

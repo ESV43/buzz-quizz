@@ -162,6 +162,15 @@
       return { ok: true };
     }
 
+    // Quizmaster remote (companion-p2p.html): PIN gate, then full state +
+    // control via 'companion-control'. Same PIN shown on the host screen.
+    function handleCompanionJoin(msg) {
+      if (String(msg && msg.pin) !== String(companionPin)) {
+        return { ok: false, error: 'Wrong PIN — ask the host.' };
+      }
+      return { ok: true, state: publicState(), teams: publicTeams() };
+    }
+
     function close() {
       clearTimers();
       onBroadcast('room-closed', { at: Date.now() });
@@ -170,6 +179,7 @@
     return {
       handlePlayerJoin: handlePlayerJoin,
       handleBuzz: handleBuzz,
+      handleCompanionJoin: handleCompanionJoin,
       control: control,
       kick: kick,
       close: close,

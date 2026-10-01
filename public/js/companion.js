@@ -37,68 +37,34 @@ try {
 } catch {}
 let unlocked = false, awayTeams = new Map();
 let compCountdown = null, compCountdownTimer = null;
-/* ---------- LAN mode (same room-code + LAN-host method as players) ---------- */
-let compLanMode = 'internet';
-try {
-  const _L = window.BuzzLan;
-  if (_L) {
-    const _s = _L.normalizeServer(_L.getSavedServer() || compLanServer || new URLSearchParams(location.search).get('server') || '');
-    if (_s && _s.indexOf('http://') === 0) compLanMode = 'lan';
-    else if ((_L.getSavedMode() || '') === 'lan' && _s) compLanMode = 'lan';
-  }
-} catch {}
-function paintCompLan() {
+/* ---------- Room type: Internet (server) vs LAN (P2P, host tab referees) --- */
+let compJoinMode = 'internet';
+try { compJoinMode = localStorage.getItem('buzz-comp-mode') || 'internet'; } catch {}
+if (compJoinMode !== 'lan') compJoinMode = 'internet';
+function paintCompMode() {
   try {
-    const L = window.BuzzLan;
-    if (!L) return;
-    $('compLanTag').textContent = compLanMode === 'lan' ? 'LAN · zero delay' : 'Internet';
-    $('compLanFields').style.display = compLanMode === 'lan' ? 'block' : 'none';
-    $('compModeInternet')?.classList.toggle('go', compLanMode !== 'lan');
-    $('compModeLan')?.classList.toggle('go', compLanMode === 'lan');
-    const srv = L.normalizeServer($('compLanInput')?.value || compLanServer || L.getSavedServer() || '');
-    const blocked = !!(srv && L.isBlockedByMixedContent(srv) && !L.isSameOrigin(srv));
-    $('compLanRedirect').style.display = blocked ? 'block' : 'none';
-    const go = $('compLanGo');
-    if (go && blocked) {
-      go.onclick = () => {
-        const room = ($('code')?.value || '').toUpperCase().trim();
-        L.setSavedServer(srv); L.setSavedMode('lan');
-        L.goLan(srv, 'companion.html', room || undefined);
-      };
-    }
+    const tag = $('compModeTag');
+    if (tag) tag.textContent = compJoinMode === 'lan' ? 'LAN · P2P' : 'Internet';
+    const mi = $('compModeInternet'), ml = $('compModeLan');
+    if (mi) mi.classList.toggle('go', compJoinMode !== 'lan');
+    if (ml) ml.classList.toggle('go', compJoinMode === 'lan');
+    const note = $('compModeNote');
+    if (note) note.textContent = compJoinMode === 'lan'
+      ? 'LAN room: just code plus PIN — you join the host tab directly over Wi-Fi.'
+      : 'Internet room: code plus PIN on the timing server.';
   } catch {}
 }
-function initCompLan() {
+function initCompMode() {
   try {
-    const L = window.BuzzLan;
-    if (!L) return;
-    const q = new URLSearchParams(location.search).get('server');
-    const pre = L.normalizeServer(q || L.getSavedServer() || compLanServer || '') || '';
-    if (pre) { $('compLanInput').value = pre.replace(/^https?:\/\//, ''); if (pre.indexOf('http://') === 0) compLanMode = 'lan'; }
-    $('compModeInternet').onclick = () => { compLanMode = 'internet'; L.setSavedMode('internet'); paintCompLan(); };
-    $('compModeLan').onclick = () => { compLanMode = 'lan'; L.setSavedMode('lan'); paintCompLan(); try { $('compLanInput')?.focus(); } catch {} };
-    $('compLanTest').onclick = async () => {
-      const srv = L.normalizeServer($('compLanInput')?.value || '');
-      if (!srv) { $('compLanStatus').textContent = 'Enter the host address first.'; return; }
-      $('compLanStatus').textContent = 'Probing ' + srv + ' …';
-      const r = await L.testServer(srv, 3000);
-      $('compLanStatus').textContent = r.ok ? `Host reachable — ${r.ms} ms. Tap “Open LAN version”.` : (r.error || 'Unreachable.');
-      if (r.ok) { L.setSavedServer(srv); compLanServer = srv; }
-      paintCompLan();
-    };
-    $('compLanOpen').onclick = () => {
-      const srv = L.normalizeServer($('compLanInput')?.value || '');
-      if (!srv) { $('compLanStatus').textContent = 'Enter the host address first.'; return; }
-      L.setSavedServer(srv); L.setSavedMode('lan');
-      L.goLan(srv, 'companion.html', ($('code')?.value || '').toUpperCase().trim() || undefined);
-    };
-    $('compLanInput')?.addEventListener('input', paintCompLan);
-    paintCompLan();
+    const mi = $('compModeInternet'), ml = $('compModeLan');
+    if (mi) mi.onclick = () => { compJoinMode = 'internet'; try { localStorage.setItem('buzz-comp-mode', 'internet'); } catch {} paintCompMode(); };
+    if (ml) ml.onclick = () => { compJoinMode = 'lan'; try { localStorage.setItem('buzz-comp-mode', 'lan'); } catch {} paintCompMode(); toast('LAN room — code plus PIN, no addresses'); };
+    paintCompMode();
   } catch {}
 }
 try {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCompLan);
-  else initCompLan();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCompMode);
+  else initCompMode();
 } catch {}
 function creds() { try { return JSON.parse(sessionStorage.getItem('buzz-companion') || 'null'); } catch { return null; } }
 function showRemote(state, teams) {
@@ -124,15 +90,12 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&a
 $('unlock').onclick = () => {
   const code = $('code').value.trim().toUpperCase(), pin = $('pin').value.trim();
   if (!code || !pin) return $('err').textContent = 'Enter both the room code and the PIN.';
-  try {
-    const L = window.BuzzLan;
-    if (L && compLanMode === 'lan') {
-      const srv = L.normalizeServer($('compLanInput')?.value || compLanServer || L.getSavedServer() || '');
-      if (!srv) { $('err').textContent = 'LAN mode: enter the host address first.'; return; }
-      L.setSavedServer(srv); L.setSavedMode('lan');
-      if (!L.isSameOrigin(srv)) { L.goLan(srv, 'companion.html', code); return; }
-    }
-  } catch {}
+  // LAN·P2P room: hand off to the P2P remote (code travels along; PIN is re-entered there).
+  if (compJoinMode === 'lan') {
+    try { localStorage.setItem('buzz-room', code); } catch {}
+    location.href = '/companion-p2p.html?room=' + encodeURIComponent(code);
+    return;
+  }
   if (!socket.connected) try { socket.connect(); } catch {}
   $('unlock').disabled = true;
   socket.timeout(8000).emit('join-as-companion', { code, pin }, (err, res) => {
@@ -140,8 +103,8 @@ $('unlock').onclick = () => {
     if (err) {
       try {
         if (window.BuzzLan?.isHttpsPage() && /vercel|netlify/i.test(location.host)) {
-          $('err').textContent = 'This internet page has no timing server. Switch to LAN above, enter the host IP, then “Open LAN version”.';
-          compLanMode = 'lan'; paintCompLan(); return;
+          $('err').textContent = 'This page has no timing server. For a LAN room (host tab referees), switch to “LAN · P2P” above and unlock with just code plus PIN.';
+          compJoinMode = 'lan'; paintCompMode(); return;
         }
       } catch {}
       $('err').textContent = 'Slow link — retry unlock.'; return;

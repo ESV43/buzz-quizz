@@ -3,19 +3,25 @@
 Broadcast-grade buzzer system. Up to twenty phones/tablets buzz in,
 results ranked by latency-compensated time, plus a PIN-locked companion remote.
 
-## Recommended: browser host — no install (Mini Militia style)
+## LAN mode — P2P, no install (use this on event day)
 
-Open the Vercel site on the host laptop → **Browser host · no install**
-(`host-p2p.html`) → Create room → teams scan the QR (`play-p2p.html?room=XXXXX`).
+The host tab becomes the referee directly over Wi-Fi (WebRTC — Mini Militia
+style). Everyone loads the site once, then every buzz travels straight to the
+host tab on the local network. There are no IP addresses to type and nothing
+in the QR but a room code, so broken-link problems (`169.254`, `localhost`
+in a QR) cannot happen.
 
-- No `npm install`. The host tab IS the timing server (WebRTC DataChannels,
-  PeerJS cloud does signaling only).
-- Same event Wi-Fi = LAN-direct buzzes (~5–20 ms). Internet relay is the
-  automatic fallback (still playable, higher jitter).
-- Requirements: internet once to load the page + signaling; host tab stays
-  open/frontmost; laptop set to never sleep while plugged in.
-- Classic `npm start` LAN mode (`host.html`, ~3 ms) is still available and is
-  the lowest-latency option when you can run Node.
+1. Host laptop connects to a Wi-Fi network (venue router or a phone hotspot —
+   that network becomes the event network) → **Host → LAN mode → Create room**.
+2. Contestants join that same Wi-Fi and scan the host QR — or open
+   **Contestant → LAN room** and enter the code. No addresses, no install.
+3. Quizmaster opens **Quizmaster → LAN room**, enters code plus the host PIN.
+   Keep the host tab frontmost; the laptop set to never sleep while plugged in.
+
+Requirements: internet once to load the pages + introduce the peers; after
+that, buzzes stay LAN-local (~5–20 ms). LAN rooms live in the host tab — a
+refresh ends the room, teams simply rejoin the new code. Projector: use the
+host's **Present** mode; the OBS overlay pairs with Internet rooms.
 
 ## Hosting — read this before event day
 
@@ -57,55 +63,61 @@ Free services sleep after 15 min without traffic (first load takes ~1 min),
 so open the host page 10 min before the event. During the quiz the 10 s
 host probe plus player sync traffic keeps it awake.
 
-## LAN mode — zero delay (use this on event day)
+## LAN mode — P2P, no install (use this on event day)
 
-The Vercel link sends every press over the internet (delay + jitter). LAN mode
-keeps every buzzer packet on event Wi-Fi: the laptop runs the timing server,
-terminals join by **room code + host LAN address**.
+The host tab becomes the referee directly over Wi-Fi (WebRTC — Mini Militia
+style). Everyone loads the site once, then every buzz travels straight to the
+host tab on the local network. There are no IP addresses to type and nothing
+in the QR but a room code, so broken-link problems (`169.254`, `localhost`
+in a QR) cannot happen.
 
-```bash
-npm start
-# note the LAN line, e.g.  LAN (zero-delay): http://192.168.1.20:3000
-```
+1. Host laptop connects to a Wi-Fi network (venue router or a phone hotspot —
+   that network becomes the event network) → **Host → LAN mode → Create room**.
+2. Contestants join that same Wi-Fi and scan the host QR — or open
+   **Contestant → LAN room** and enter the code. No addresses, no install.
+3. Quizmaster opens **Quizmaster → LAN room**, enters code plus the host PIN.
+   Keep the host tab frontmost; the laptop set to never sleep while plugged in.
 
-1. Whichever Wi-Fi the laptop is on becomes the event network: open its
-   **LAN address** `/host.html` (not the Vercel URL) → pick **LAN mode**,
-   Create room. Connect all phones to that same Wi-Fi, then share the QR
-   (internet `https://` link stays as a slower fallback; switch modes anytime).
-   If a phone shows `ERR_CONNECTION_TIMED_OUT` on a `169.254.x.x` link, the laptop
-   never got a Wi-Fi address: reconnect its Wi-Fi (a phone hotspot works), have
-   everyone join that network, then Reclaim the room to refresh the QR
-   (the server never advertises 169.254).
-2. Phones/tablets join the same Wi-Fi, then either scan the LAN QR or open
-   `/lan.html`, enter the host address (`192.168.1.20:3000`) + room code →
-   Join buzzer / remote / overlay.
-3. The player and companion pages have an **Internet | LAN** switch: enter the
-   host once (saved), Test it, then Join. If you open the Vercel `https://`
-   page with a LAN host set, browsers block the socket (mixed content) — the
-   page shows a one-tap **Open LAN version** button that hops you onto
-   `http://<lan-ip>:3000/play.html?room=XXXXX`. After that hop everything is
-   LAN-local.
+Requirements: internet once to load the pages + introduce the peers; after
+that, buzzes stay LAN-local (~5–20 ms). LAN rooms live in the host tab — a
+refresh ends the room, teams simply rejoin the new code. Projector: use the
+host's **Present** mode; the OBS overlay pairs with Internet rooms.
 
-Discovery: `GET /api/info` returns `{ lanIps, lanUrls, port }`.
-`create-room` / `host-rejoin` now return split links: `lanUrl` + `lanJoinUrls`
-+ `lanQr` (fast path) alongside `internetUrl` (fallback), plus `lanIps`/`port`.
-`?server=<host>:<port>` on any page pre-fills the LAN host.
+## Internet mode — room lives on the timing server
 
-## Deploy (Vercel — static only, NOT for the timing server)
+Host → **Internet mode** → Create room. The QR holds the server link and
+works over mobile data or any Wi-Fi — for when everyone is not on the same
+network. Rankings stay delay-compensated. The same 4 lobby options work;
+only the host picks the mode before creating.
 
-Push this folder to the repo connected to Vercel and redeploy — no extra config.
-Join links and the QR resolve automatically:
+## Hosted server URL (no laptop needed) — Render free tier
 
-1. `PUBLIC_URL` env var, if set (e.g. `https://buzz-theta-ashy.vercel.app`)
-2. otherwise the public `Host` header (works on Vercel with zero config)
-3. otherwise the host's LAN addresses (local-network play)
+If you never want `localhost`, LAN IPs, or `npm start` on event day, give the
+referee a permanent home on Render (free, no card). The app then has one
+server URL and everyone — host, contestants, quizmaster, spectator — opens
+that URL directly. No laptop acts as a server.
 
-So on `https://buzz-theta-ashy.vercel.app/host.html`, the QR encodes
-`https://buzz-theta-ashy.vercel.app/play.html?room=XXXXX`. On a laptop it shows
-`http://<lan-ip>:3000/play.html?room=XXXXX` as before.
+1. Push this repo to GitHub.
+2. Render Dashboard → New → Blueprint → select the repo (`render.yaml`
+   already sets plan `free`, start `npm start`, health check `/health`).
+   No env vars needed: Render provides the public URL itself.
+3. Open `https://<your-app>.onrender.com/host.html` → pick **Internet mode**
+   → Create room. The QR encodes the same `https://` URL — phones join over
+   mobile data or any Wi-Fi.
 
-To force a URL regardless of host, set in Vercel → Project → Settings →
-Environment Variables: `PUBLIC_URL = https://buzz-theta-ashy.vercel.app`.
+Trade-off: internet latency (~30–80 ms, jitter-corrected in rankings) instead
+of LAN's ~3 ms. For zero delay on event day, still use LAN mode below.
+Free Render services sleep after 15 min idle — open the host page 10 min
+early to wake it; quiz traffic keeps it awake.
+
+## Deploy (Vercel — pages only, NOT the timing server)
+
+Vercel serves the pages fine but cannot run the referee: its workers sleep,
+forget rooms, and can't hold 20 live buzzer connections. So a Vercel URL
+alone can never be the server URL — the timing server must be the laptop
+(LAN below) or Render (above). `PUBLIC_URL` forces the links regardless of
+host (e.g. `PUBLIC_URL = https://<your-app>.onrender.com`); otherwise the
+server uses Render's own URL, then the public `Host` header, then LAN.
 
 ## Run locally
 

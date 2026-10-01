@@ -44,13 +44,13 @@
     <h2 class="ptitle">Open a room</h2>
     <div class="field"><label>Hosting mode — pick before creating</label>
       <div class="btnrow">
-        <button class="btn plain small" id="modeLanBtn" type="button">LAN · zero delay</button>
-        <button class="btn plain small" id="modeNetBtn" type="button">Internet · Vercel link</button>
+        <button class="btn plain small go" id="modeLanBtn" type="button">LAN · P2P no install</button>
+        <button class="btn plain small" id="modeNetBtn" type="button">Internet · server</button>
       </div>
       <p class="note" id="modeNote" style="margin:8px 0 0"></p>
     </div>
     <p class="sub">This machine is the timing host. Teams join by code or QR. 8–20 buzzers.</p>
-    <p class="note" id="lanSetupNote" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px"><b>LAN mode:</b> whatever Wi-Fi this laptop is on becomes the event network — open this page from the <b>http://192.168.…</b> address (<span class="mono">npm start</span>), connect all contestant phones to that same Wi-Fi, and share the QR. <b>Internet mode:</b> host from the public Vercel link — QR and links use the Vercel server URL. <a href="/lan.html">LAN guide</a></p>
+    <p class="note" id="lanSetupNote" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px"><b>LAN mode:</b> no install, no addresses — this tab becomes the referee over Wi-Fi (QR holds just a code). Everyone loads the site once, then buzzes stay on the local network. <b>Internet mode:</b> the room lives on the timing server — QR holds the server link, works over mobile data.</p>
     <div class="guide">
       <div class="gstep"><b>01</b><span>Create the room — <b>code + QR</b> appear in the side rail</span></div>
       <div class="gstep"><b>02</b><span>Teams check in on their terminals, then <b>Arm</b> each question</span></div>
@@ -60,11 +60,12 @@
       <select id="maxTeams"><option>8</option><option>10</option><option>12</option><option selected>16</option><option>20</option></select>
     </div>
     <div class="btnrow" style="margin-top:16px"><button class="btn go" id="createBtn">Create room</button></div>
-    <div class="field" style="margin-top:22px"><label>Reclaim after refresh</label></div>
-    <div class="btnrow"><input id="rejoinCode" class="mono" placeholder="XXXXX" maxlength="5" style="text-transform:uppercase"/><button class="btn plain" id="rejoinBtn" style="flex:0 0 150px">Reclaim</button></div>
+    <div class="field" id="reclaimRow" style="margin-top:22px"><label>Reclaim after refresh (Internet rooms)</label></div>
+    <div class="btnrow" id="reclaimBtns"><input id="rejoinCode" class="mono" placeholder="XXXXX" maxlength="5" style="text-transform:uppercase"/><button class="btn plain" id="rejoinBtn" style="flex:0 0 150px">Reclaim</button></div>
+    <p class="note" id="reclaimNote" style="margin:8px 0 0">LAN rooms live in this tab — a refresh ends the room, teams simply rejoin the new code.</p>
   </div>
 
-  <div id="studio" class="studio" style="display:none">
+  <div id="studioNet" class="studio" style="display:none">
     <aside class="rail">
       <section class="panel">
         <div class="kicker">State</div>
@@ -97,11 +98,7 @@
         <p class="note deck-hint" style="margin:12px 0 0"><span class="keys">Space</span> arm / lock &nbsp; <span class="keys">N</span> next &nbsp; <span class="keys">R</span> reset &nbsp; <span class="keys">O</span> overlay. Arming clears the previous standings.</p>
       </section>
       <section class="panel" id="joinPanel">
-        <div class="kicker">Team entry · <span id="lanBadge" class="mono" style="color:var(--go)">LAN — zero delay</span> <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
-        <div class="btnrow" style="margin-bottom:10px">
-          <button class="btn plain small" id="modeLanBtnS" type="button">LAN · zero delay</button>
-          <button class="btn plain small" id="modeNetBtnS" type="button">Internet · Vercel</button>
-        </div>
+        <div class="kicker">Team entry · Internet room <button class="mini-toggle" id="toggleJoinVis" title="Hide QR + links from projector">Hide</button></div>
         <div id="joinSecrets">
           <div class="qrrow">
             <img id="qr" alt="Join QR code"/>
@@ -166,6 +163,69 @@
     </main>
   </div>
 
+  <div id="studioLan" class="studio" style="display:none">
+    <aside class="rail">
+      <section class="panel">
+        <div class="kicker">State · LAN room</div>
+        <div class="stateword locked" id="stateWordL">LOCKED</div>
+        <div class="statesub" id="stateSubL">Awaiting arm</div>
+        <div class="qline"><span class="k">Question</span><span class="qn" id="qNumL">–</span></div>
+        <div class="qline"><span class="k">Room</span><span class="roomcode" id="roomCodeL">–––––</span></div>
+        <p class="note" id="peerNoteL" style="margin:10px 0 0"></p>
+      </section>
+      <section class="panel deck">
+        <div class="kicker">Control deck</div>
+        <button class="btn go" id="armBtnL" style="padding:17px">Arm buzzer</button>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn plain" id="lockBtnL">Lock</button>
+          <button class="btn plain" id="nextBtnL">Next</button>
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn warn" id="resetBtnL">Reset</button>
+          <button class="btn plain" id="presentBtnL">Present</button>
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn warn small" id="endRoomBtnL">End room</button>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="kicker">Team entry · LAN room — code only</div>
+        <div class="qrrow">
+          <img id="qrL" alt="Join QR code"/>
+          <div>
+            <div class="note">No addresses in this QR — just the room code. Contestants join the same Wi-Fi this laptop is on, then scan.</div>
+            <div class="joinlist" style="margin-top:8px"><span class="prime" id="joinLinkL">—</span></div>
+            <div class="btnrow" style="margin-top:8px"><button class="btn plain small" id="copyBtnL" type="button">Copy link</button></div>
+          </div>
+        </div>
+        <p class="note" style="margin:8px 0 0">Quizmaster PIN: <b class="mono" id="compPinL">····</b> · remote: <b class="mono">Contestant page → Quizmaster → LAN room</b>, code plus PIN.</p>
+      </section>
+    </aside>
+
+    <main>
+      <section class="spot" id="spotL">
+        <div class="kicker" id="spotKickerL" style="margin-bottom:0">Standby</div>
+        <div class="s-name" id="spotNameL">Awaiting first buzz</div>
+        <div class="s-meta" id="spotMarginL">ARM THE BUZZER TO OPEN THE QUESTION</div>
+      </section>
+
+      <section class="panel" style="margin-top:14px">
+        <div class="kicker">Standings · delay-compensated <span class="buzzcount" id="buzzCountL"></span><span id="teamCountL" style="margin-left:10px"></span></div>
+        <div style="overflow-x:auto">
+        <table class="board">
+          <thead><tr><th>Pos</th><th>Team</th><th>Press time</th><th>Margin</th><th>Link</th></tr></thead>
+          <tbody id="rankBodyL"></tbody>
+        </table>
+        </div>
+      </section>
+
+      <section style="margin-top:14px">
+        <div class="kicker">Roster · select × to remove</div>
+        <div class="roster" id="rosterL"></div>
+      </section>
+    </main>
+  </div>
+
   <footer>QSI · <span id="footRoom"></span></footer>
 </div>
 <button id="exitPresent" title="Back to console (Esc)">Exit present · Esc</button>
@@ -173,6 +233,9 @@
 <canvas id="fx"></canvas>
 <script src="/js/theme.js?v=2"></script>
 <script src="/js/wake.js?v=2"></script>
-<script src="/js/host.js?v=10"></script>
+<script src="/js/host.js?v=11"></script>
+<script src="/js/p2p.js?v=2"></script>
+<script src="/js/p2p-host-store.js?v=2"></script>
+<script src="/js/host-lan.js?v=1"></script>
 </body>
 </html>

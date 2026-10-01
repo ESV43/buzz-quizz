@@ -31,28 +31,13 @@
     <div class="kicker">Check in · Node-server room</div>
     <h2 class="ptitle">Join the round</h2>
     <p class="sub">Room code is on the host display. One terminal per team of two. Joining a <b>browser-hosted</b> room (no install)? <a href="/play-p2p.html">Open the browser join page</a> — codes only work in their own mode.</p>
-    <div id="lanRedirectBar" style="display:none;border:1px solid #4d3f22;border-radius:8px;padding:12px 14px;margin-bottom:14px;background:#1a1409">
-      <div class="kicker" style="margin-bottom:6px">LAN mode available — zero delay</div>
-      <p class="note" id="lanRedirectText" style="margin:0 0 10px">This internet page cannot reach the event-Wi-Fi host directly. Open the LAN version so buzzer packets never leave the room.</p>
-      <div class="btnrow"><button class="btn go" id="lanRedirectBtn" type="button">Open LAN version</button></div>
-    </div>
     <div style="border:1px solid var(--line-soft);border-radius:8px;padding:12px 14px;margin-bottom:14px">
-      <div class="kicker" style="margin-bottom:8px">Connection · <span id="lanModeTag" class="mono">Internet</span></div>
+      <div class="kicker" style="margin-bottom:8px">Room type · <span id="playModeTag" class="mono">Internet</span></div>
       <div class="btnrow">
-        <button class="btn plain small" id="modeInternet" type="button">Internet</button>
-        <button class="btn plain small" id="modeLan" type="button">LAN · zero delay</button>
+        <button class="btn plain small" id="playModeInternet" type="button">Internet room</button>
+        <button class="btn plain small" id="playModeLan" type="button">LAN · P2P no install</button>
       </div>
-      <div id="lanFields" style="display:none;margin-top:10px">
-        <div class="field"><label>Host LAN address</label>
-          <input id="lanServerInput" placeholder="192.168.1.20:3000" autocomplete="off" inputmode="url"/>
-        </div>
-        <div class="btnrow" style="margin-top:8px">
-          <button class="btn plain small" id="lanTestBtn" type="button">Test</button>
-          <button class="btn plain small" id="lanOpenBtn" type="button">Open LAN version</button>
-        </div>
-        <p class="note" id="lanStatus" style="margin:8px 0 0"></p>
-        <p class="note" style="margin:6px 0 0">Same Wi-Fi as the host laptop. The IP is on the host screen (room code joins the room on that host).</p>
-      </div>
+      <p class="note" id="playModeNote" style="margin:8px 0 0">Internet room: code works on the timing server. LAN room: the host tab is the referee over Wi-Fi — same code box, no addresses.</p>
     </div>
     <div class="field"><label>Room code</label>
       <input id="roomInput" class="code" placeholder="·····" maxlength="5" autocomplete="off"/>

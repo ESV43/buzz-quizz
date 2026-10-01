@@ -27,24 +27,13 @@
     <div class="kicker">Authentication</div>
     <h2 class="ptitle">Quizmaster access</h2>
     <p class="sub">Room code plus the 4-digit PIN from the host console. Three wrong attempts: 30-second lockout, host alerted.</p>
-    <div id="compLanBar" style="border:1px solid var(--line-soft);border-radius:8px;padding:12px 14px;margin-bottom:14px">
-      <div class="kicker" style="margin-bottom:8px">Connection · <span id="compLanTag" class="mono">Internet</span></div>
+    <div id="compModeBar" style="border:1px solid var(--line-soft);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div class="kicker" style="margin-bottom:8px">Room type · <span id="compModeTag" class="mono">Internet</span></div>
       <div class="btnrow">
-        <button class="btn plain small" id="compModeInternet" type="button">Internet</button>
-        <button class="btn plain small" id="compModeLan" type="button">LAN · zero delay</button>
+        <button class="btn plain small" id="compModeInternet" type="button">Internet room</button>
+        <button class="btn plain small" id="compModeLan" type="button">LAN · P2P no install</button>
       </div>
-      <div id="compLanFields" style="display:none;margin-top:10px">
-        <div class="field"><label>Host LAN address</label><input id="compLanInput" placeholder="192.168.1.20:3000" autocomplete="off" inputmode="url"/></div>
-        <div class="btnrow" style="margin-top:8px">
-          <button class="btn plain small" id="compLanTest" type="button">Test</button>
-          <button class="btn plain small" id="compLanOpen" type="button">Open LAN version</button>
-        </div>
-        <p class="note" id="compLanStatus" style="margin:8px 0 0"></p>
-      </div>
-      <div id="compLanRedirect" style="display:none;margin-top:10px;border:1px solid #4d3f22;border-radius:8px;padding:10px 12px;background:#1a1409">
-        <p class="note" style="margin:0 0 10px">Internet page cannot reach the LAN host — open the LAN version for zero-delay control.</p>
-        <div class="btnrow"><button class="btn go small" id="compLanGo" type="button">Open LAN version</button></div>
-      </div>
+      <p class="note" id="compModeNote" style="margin:8px 0 0">Internet room: code plus PIN on the timing server. LAN room: the host tab referees — same code plus PIN, no addresses.</p>
     </div>
     <div class="field"><label>Room code</label><input id="code" class="code" placeholder="·····" maxlength="5" autocomplete="off"/></div>
     <div class="field"><label>Companion PIN</label><input id="pin" class="code" placeholder="····" inputmode="numeric" maxlength="4" autocomplete="off"/></div>

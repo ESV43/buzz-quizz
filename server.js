@@ -35,7 +35,10 @@ const io = new Server(server, {
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 const PORT = process.env.PORT || 3000;
-const PUBLIC_URL = (process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+// Render injects RENDER_EXTERNAL_URL automatically, so a Render deploy needs
+// zero config: the QR/links just use the public https URL. Set PUBLIC_URL
+// manually only to override (e.g. a custom domain or Cloudflare tunnel).
+const PUBLIC_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
 
 app.use(express.static(path.join(__dirname, 'public'), {
   // Phones cache aggressively: HTML must revalidate every load so terminals
